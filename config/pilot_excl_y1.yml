@@ -1,0 +1,117 @@
+# =============================================================================
+# pilot_excl_y1.yml
+# Pilot study — Y1 excluded from restricted scoring, Y1 key corrected.
+#
+# Y1 is excluded because it relies on non-universal background knowledge,
+# making it a questionable item on content-validity grounds regardless of
+# whether the answer key is correct. Full scoring (all 10 items) is still
+# computed alongside restricted (9 items, Y1 dropped).
+#
+# Use with: study_data/pilot_y1key_corrected/
+# Run:  set PIPELINE_CONFIG=config\pilot_excl_y1.yml
+#       set STUDY_DATA_PATH=study_data\pilot_y1key_corrected
+#       Rscript R\run_all.R
+# =============================================================================
+
+study:
+  name: "pilot_excl_y1"
+  intervention_label: "AI"
+  control_label: "Control"
+  form_x_label: "Form X"
+  form_y_label: "Form Y"
+
+columns:
+  participant_id: "Participant_ID"
+  intervention_order: "AI_Order"
+  form_x_order: "X_Order"
+  form_y_order: "Y_Order"
+  time_taken: "Time_taken"
+
+# Y1 excluded: non-universal knowledge item; questionable content validity.
+# Full score = all 10 Y items.  Restricted score = 9 Y items (no Y1).
+item_exclusions:
+  x: []
+  y: [y1]
+
+scores:
+  scale_to: 10
+
+analysis:
+  alpha: 0.05
+  ci_level: 0.95
+  min_n_carryover: 4
+  ceiling_threshold: null
+  floor_threshold: null
+
+figures:
+  dpi: 300
+  width_in: 7.5
+  height_in: 5.0
+  include_titles: false
+  base_font_size: 12
+  font_family: "sans"
+  color_intervention: "#2E8B57"
+  color_control:      "#CD853F"
+  color_period1:      "#4682B4"
+  color_period2:      "#B22222"
+  y_axis_score_label: "Score (0–10)"
+  x_axis_form_label: "Test Form"
+  color_seq_ab: "#2E8B57"
+  color_seq_ba: "#8B4513"
+  color_form_x: "#4682B4"
+  color_form_y: "#B22222"
+  point_alpha: 0.75
+  point_size:  2.2
+  line_alpha:  0.55
+  errorbar_width: 0.18
+  show_ceiling_floor_lines: true
+  significance_style: "none"
+
+tables:
+  export_csv: true
+  export_png: true
+  include_titles: false
+  digits_default: 3
+  digits_percent: 1
+
+output:
+  subfolder_by_type: true
+  subfolders:
+    - "descriptive"
+    - "psychometrics"
+    - "item_analysis"
+    - "primary"
+    - "period_effects"
+    - "mixed_models"
+    - "exploratory"
+    - "supplementary"
+
+demographics:
+  generate: false
+  file: "demographics.csv"
+  columns:
+    participant:    "participant"
+    age:            "age"
+    gender:         "gender"
+    training_level: "training_level"
+
+sf36:
+  generate: false
+  file: "sf36_scores.csv"
+
+optional_analyses:
+  run_time_analysis: true
+  run_normality_tests: true
+  run_restricted_comparison: true   # compare full-10 vs restricted-9 (no Y1)
+  run_model_comparison: true
+  run_ceiling_effects_figure: true
+  run_period_specific_intervention: true
+  run_subgroup4_contrasts: true
+
+psychometrics:
+  ability_strata: 4
+  top_miss_threshold: 0.25
+  bottom_hit_threshold: 0.60
+  min_item_rest_r: 0.10
+  max_item_missing_rate: 0.05
+  max_participant_missing_rate: 0.20

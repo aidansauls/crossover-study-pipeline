@@ -1,0 +1,52 @@
+CROSSOVER STUDY ANALYSIS PIPELINE
+Copyright © 2026 Aidan Sauls
+
+===============================================================================
+LICENSE SUMMARY
+===============================================================================
+
+This Software is open for use by anyone. You are free to run, copy, modify,
+and distribute it for any purpose — academic, research, or commercial.
+
+There is one condition: if you use this Software or any outputs it produces
+in any published or distributed work, you must give credit to Aidan Sauls
+and this tool. See the LICENSE file for the full legal text.
+
+OWNERSHIP
+---------
+This Software was created by and is the intellectual property of Aidan Sauls.
+Copyright © 2026 Aidan Sauls. All rights reserved where not expressly granted.
+
+PERMITTED USE (no permission needed)
+--------------------------------------
+  - Run the pipeline on your own research data
+  - Include generated outputs (figures, tables, logs) in publications
+  - Modify the code for your own purposes
+  - Share your modified version, as long as you retain this notice
+
+REQUIRED: ATTRIBUTION
+-----------------------
+Any publication, presentation, report, preprint, poster, or software product
+that uses this Software, is built on it, or includes outputs it generated
+MUST include one of the following acknowledgments:
+
+  In-text:
+    "Statistical analyses were conducted using the Crossover Study Analysis
+     Pipeline (Sauls, 2026; https://github.com/AidanSauls/crossover-study-pipeline)."
+
+  Acknowledgments section:
+    "The authors thank Aidan Sauls for the Crossover Study Analysis Pipeline
+     (https://github.com/AidanSauls/crossover-study-pipeline)."
+
+  Formal software citation:
+    Sauls, A. (2026). Crossover Study Analysis Pipeline [Computer software].
+    https://github.com/AidanSauls/crossover-study-pipeline
+
+NO WARRANTY
+-----------
+THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND. THE AUTHOR
+IS NOT LIABLE FOR ANY DAMAGES ARISING FROM ITS USE.
+
+===============================================================================
+See LICENSE for the complete legal text.
+===============================================================================

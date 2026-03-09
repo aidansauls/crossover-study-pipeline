@@ -1,0 +1,70 @@
+# =============================================================================
+# comparison_pilot.yml
+# Configuration for the comparison panel figures across pilot exclusion configs.
+#
+# Run:
+#   $env:COMPARISON_CONFIG = "config\comparison_pilot.yml"
+#   & "C:\Program Files\R\R-4.5.2\bin\Rscript.exe" R\run_comparison.R
+#
+# Or use RunPipeline.bat option [9] and select this file.
+# =============================================================================
+
+comparison:
+
+  # ------------------------------------------------------------------
+  # Runs to compare.
+  # Each entry is a completed pipeline run:
+  #   name   — must match study.name in that run's config (= output dir)
+  #   label  — text printed above each panel in the comparison figure
+  #   config — path to the config YAML used for that run (relative to
+  #             project root).  Required when common_scale is true.
+  # ------------------------------------------------------------------
+  runs:
+    - name:   "pilot_all_items"
+      label:  "All Items"
+      config: "config/pilot_no_exclusions.yml"
+    - name:   "pilot_excl_y1"
+      label:  "Y1 Excluded"
+      config: "config/pilot_excl_y1.yml"
+    - name:   "pilot_excl_y1_y6"
+      label:  "Y1 + Y6 Excluded"
+      config: "config/pilot_excl_y1_y6.yml"
+
+  # ------------------------------------------------------------------
+  # Common scale: when true, all runs are re-rendered with a shared
+  # y-axis lower bound (the global minimum across all runs' data)
+  # before stitching.  Produces figures_comparison/ dirs inside each
+  # run's output folder; the per-run figures/ dirs are untouched.
+  # ------------------------------------------------------------------
+  common_scale: true
+
+  # ------------------------------------------------------------------
+  # Panel layout: how to arrange the runs for each figure.
+  #   "side_by_side"  — runs placed left to right (columns)
+  #   "top_bottom"    — runs stacked vertically (rows)
+  # ------------------------------------------------------------------
+  layout: "side_by_side"
+
+  # ------------------------------------------------------------------
+  # Output directory name (created under outputs/).
+  # ------------------------------------------------------------------
+  output_name: "comparison_pilot"
+
+  # ------------------------------------------------------------------
+  # Which figure subfolders to process.
+  # Use "all" to process every subfolder, or list specific names:
+  #   figure_groups:
+  #     - "primary"
+  #     - "period_effects"
+  # ------------------------------------------------------------------
+  figure_groups: "all"
+
+  # ------------------------------------------------------------------
+  # Label appearance at the top of each panel column/row.
+  # ------------------------------------------------------------------
+  label_font_size: 28      # Points. Increase if labels are hard to read.
+
+  # ------------------------------------------------------------------
+  # Output image quality (dots per inch).
+  # ------------------------------------------------------------------
+  dpi: 300

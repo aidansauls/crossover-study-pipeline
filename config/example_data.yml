@@ -1,0 +1,89 @@
+# =============================================================================
+# example_data.yml
+# Example dataset bundled with the repo.
+# Run:  $env:PIPELINE_CONFIG = "config\example_data.yml"
+#       $env:STUDY_DATA_PATH = "example_data"
+#       Rscript R\run_all.R
+# =============================================================================
+
+study:
+  name: "example_data"
+  intervention_label: "Intervention"
+  control_label: "Control"
+  form_x_label: "Form X"
+  form_y_label: "Form Y"
+
+columns:
+  participant_id: "Participant_ID"
+  intervention_order: "Intervention_Order"
+  form_x_order: "X_Order"
+  form_y_order: "Y_Order"
+  time_taken: "Time_taken"
+
+item_exclusions:
+  x: []
+  y: []
+
+scores:
+  scale_to: 15
+
+analysis:
+  alpha: 0.05
+  ci_level: 0.95
+  min_n_carryover: 4
+  ceiling_threshold: null
+  floor_threshold: null
+
+figures:
+  dpi: 300
+  width_in: 7.5
+  height_in: 5.0
+  include_titles: false
+  base_font_size: 12
+  font_family: "sans"
+  color_intervention: "#2E8B57"
+  color_control:      "#CD853F"
+  color_period1:      "#4682B4"
+  color_period2:      "#B22222"
+  y_axis_score_label: "Score (0–15)"
+  x_axis_form_label: "Test Form"
+  color_seq_ab: "#2E8B57"
+  color_seq_ba: "#8B4513"
+  color_form_x: "#4682B4"
+  color_form_y: "#B22222"
+  point_alpha: 0.75
+  point_size:  2.2
+  line_alpha:  0.55
+  errorbar_width: 0.18
+  show_ceiling_floor_lines: true
+  significance_style: "none"
+
+tables:
+  export_csv: true
+  export_png: true
+  include_titles: false
+  digits_default: 3
+  digits_percent: 1
+
+demographics:
+  generate: false
+
+sf36:
+  generate: false
+
+optional_analyses:
+  run_time_analysis: true
+  run_normality_tests: true
+  run_restricted_comparison: false
+  run_model_comparison: true
+  run_ceiling_effects_figure: true
+  run_period_specific_intervention: true
+  run_subgroup4_contrasts: true
+
+psychometrics:
+  ability_strata: 4
+  top_miss_threshold: 0.25
+  bottom_hit_threshold: 0.60
+  min_item_rest_r: 0.10
+  max_item_missing_rate: 0.05
+  max_participant_missing_rate: 0.20

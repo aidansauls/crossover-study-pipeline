@@ -1,0 +1,263 @@
+# =============================================================================
+# study_config.yml
+# Configuration for the Crossover Within-Subject Study Analysis Pipeline
+# =============================================================================
+# Copy this file and rename it for each study, or edit values directly.
+# This file is read at runtime; you do not need to re-run anything to edit it.
+# =============================================================================
+
+study:
+  # Identifier used to name the outputs/ subfolder
+  name: "my_study"
+
+  # Human-readable labels for your two conditions
+  # These appear on figure axes and table row labels
+  intervention_label: "Intervention"
+  control_label: "Control"
+
+  # Human-readable labels for your two test forms
+  form_x_label: "Form X"
+  form_y_label: "Form Y"
+
+# -----------------------------------------------------------------------------
+# Column name mapping
+# Tells the pipeline which column headers to use in your CSVs.
+# The pipeline will also accept the defaults listed here with any capitalisation.
+# -----------------------------------------------------------------------------
+columns:
+  # assignment.csv column names
+  participant_id: "Participant_ID"      # also accepts: Participant, participant, ID
+  intervention_order: "Intervention_Order"  # also accepts: AI_Order (legacy)
+  form_x_order: "X_Order"
+  form_y_order: "Y_Order"
+  # Optional time column in posttest CSVs (set to null to disable)
+  time_taken: "Time_taken"
+
+# -----------------------------------------------------------------------------
+# Item exclusions
+# List item names (lowercase) to exclude from scoring.
+# Format: "x1", "x3", "y1", "y6" etc.
+# Leave empty [] to include all items.
+# These appear in a separate "restricted" scoring column alongside the full score.
+# -----------------------------------------------------------------------------
+item_exclusions:
+  x: []
+  y: []
+
+# -----------------------------------------------------------------------------
+# Scoring
+# -----------------------------------------------------------------------------
+scores:
+  # Scale final scores to this maximum (e.g., 10 = 0-10 scale)
+  scale_to: 10
+
+# -----------------------------------------------------------------------------
+# Analysis settings
+# -----------------------------------------------------------------------------
+analysis:
+  alpha: 0.05           # Significance level
+  ci_level: 0.95        # Confidence interval coverage
+  # Minimum n per sequence group to run carryover test (Grizzle method)
+  min_n_carryover: 4
+  # Ceiling and floor thresholds used in figures and Table 14.
+  # Set to null to auto-compute as 95% / 5% of scores.scale_to.
+  ceiling_threshold: null   # e.g. 9.5 for a 0–10 scale
+  floor_threshold: null     # e.g. 0.5 for a 0–10 scale
+
+# -----------------------------------------------------------------------------
+# Figure settings
+# No titles or captions are placed on figures (add these in your manuscript).
+# Labels, tick marks, and legends are controlled here.
+# -----------------------------------------------------------------------------
+figures:
+  dpi: 300
+  width_in: 7.5         # Default figure width (inches)
+  height_in: 5.0        # Default figure height (inches)
+  include_titles: false
+  base_font_size: 12
+  font_family: "sans"   # "sans", "serif", or specific font name
+
+  # Condition colors
+  color_intervention: "#2E8B57"   # Sea green
+  color_control:      "#CD853F"   # Peru / warm tan
+  color_period1:      "#4682B4"   # Steel blue
+  color_period2:      "#B22222"   # Firebrick
+
+  # Axis label for score axis (both forms share this)
+  y_axis_score_label: "Score (0–10)"
+
+  # Form axis labels (used on x-axis when forms are compared)
+  x_axis_form_label: "Test Form"
+
+  # Extra colors (sequence groups, individual forms)
+  color_seq_ab: "#2E8B57"     # Intervention-first sequence line color
+  color_seq_ba: "#8B4513"     # Control-first sequence line color
+  color_form_x: "#4682B4"     # Form X specific color (used in form comparison plots)
+  color_form_y: "#B22222"     # Form Y specific color
+
+  # Point and line aesthetics
+  point_alpha: 0.75
+  point_size:  2.2
+  line_alpha:  0.55           # Alpha for individual spaghetti lines
+  errorbar_width: 0.18        # Width of error bars
+
+  # Reference lines on score plots
+  show_ceiling_floor_lines: true   # Dashed ceiling/floor lines on score plots
+
+  # Significance annotation on plots
+  # Options: "none"  (no p-value or stars shown on figures)
+  #          "stars" (add asterisk annotation for p < .05)
+  significance_style: "none"
+
+# -----------------------------------------------------------------------------
+# Table settings
+# -----------------------------------------------------------------------------
+tables:
+  export_csv: true
+  export_png: true
+  include_titles: false   # Keep false; add titles in manuscript
+  digits_default: 3
+  digits_percent: 1
+
+# -----------------------------------------------------------------------------
+# Output directory structure
+# Figures and tables are organized into purpose subfolders.
+# -----------------------------------------------------------------------------
+output:
+  subfolder_by_type: true
+  subfolders:
+    - "descriptive"       # Flow, sequence allocation, distributions
+    - "psychometrics"     # Item analysis, reliability, IRT (summary tables)
+    - "item_analysis"     # Per-item psychometrics: suspicious items, ability strata
+    - "primary"           # Intervention effect contrasts
+    - "period_effects"    # Practice, carryover, sequence x period
+    - "mixed_models"      # Linear mixed-effects results
+    - "exploratory"       # Exploratory / hypothesis-generating analyses
+    - "supplementary"     # Per-participant, correlations, sensitivity
+
+# -----------------------------------------------------------------------------
+# Demographics module
+# Set generate: true and provide demographics.csv in your study data folder.
+# Column names below are the defaults — change to match your CSV headers.
+# -----------------------------------------------------------------------------
+demographics:
+  generate: false                   # set true when you have a demographics.csv
+  file: "demographics.csv"          # filename relative to STUDY_DATA_PATH
+  columns:
+    participant:    "participant"    # participant ID column in demographics.csv
+    age:            "age"            # numeric age column (leave blank to skip)
+    gender:         "gender"         # categorical gender column (leave blank to skip)
+    training_level: "training_level" # e.g. year in programme (leave blank to skip)
+
+# -----------------------------------------------------------------------------
+# SF-36 Health Survey (optional sub-module of demographics)
+# Only used when demographics.generate: true
+# -----------------------------------------------------------------------------
+sf36:
+  generate: false                   # set true when you have sf36_scores.csv
+  file: "sf36_scores.csv"           # filename relative to STUDY_DATA_PATH
+  # Override domain column → label mapping (leave blank to use SF-36 defaults)
+  # domains:
+  #   physical_functioning: "Physical Functioning"
+  #   role_physical: "Role - Physical"
+  #   bodily_pain: "Bodily Pain"
+  #   general_health: "General Health"
+  #   vitality: "Vitality"
+  #   social_functioning: "Social Functioning"
+  #   role_emotional: "Role - Emotional"
+  #   mental_health: "Mental Health"
+
+# -----------------------------------------------------------------------------
+# Optional analyses
+# Set to false to skip a section entirely.
+# -----------------------------------------------------------------------------
+optional_analyses:
+  # Analyse time_taken columns if present in the posttest CSVs
+  run_time_analysis: true
+  # Run Shapiro-Wilk normality tests on scores and differences
+  run_normality_tests: true
+  # Generate full-vs-restricted comparison plots and tables (only applies when
+  # item_exclusions are set above)
+  run_restricted_comparison: true
+  # Run LME model comparison (Model 1 vs Model 2 via likelihood ratio test)
+  run_model_comparison: true
+  # Ceiling/floor effects figure (all conditions, jitter + mean crossbar)
+  run_ceiling_effects_figure: true
+  # Run period-specific intervention effect analysis (Int-in-P1 vs Int-in-P2)
+  run_period_specific_intervention: true
+  # Run 4-subgroup (sequence × intervention form) contrasts
+  run_subgroup4_contrasts: true
+
+# -----------------------------------------------------------------------------
+# Psychometrics settings
+# Controls ability-stratified item analysis and suspicious item detection.
+# These settings affect 03_psychometrics.R and the corresponding tables/figures.
+# -----------------------------------------------------------------------------
+psychometrics:
+  # Number of ability strata (quantile groups) for stratified item analysis.
+  # 4 = quartile analysis (Q1 lowest, Q4 highest).  Minimum 2, maximum 10.
+  ability_strata: 4
+
+  # Suspicious item detection thresholds.
+  # top_miss_threshold: flag an item if the TOP ability stratum misses it at
+  #   this rate or above. E.g. 0.25 = flagged when ≥25% of the top group misses.
+  top_miss_threshold: 0.25
+
+  # bottom_hit_threshold: flag an item if the BOTTOM ability stratum gets it
+  #   right at this rate or above. E.g. 0.60 = flagged when ≥60% of the
+  #   bottom group answers correctly (suggests guessing / item is too easy).
+  bottom_hit_threshold: 0.60
+
+  # Minimum item-rest correlation to avoid the "negative discrimination" flag.
+  # Items with item_rest_r below this threshold are flagged.
+  min_item_rest_r: 0.10
+
+  # Maximum proportion of missing responses per item before a warning is logged.
+  # E.g. 0.05 = warn if >5% of responses for an item are NA.
+  max_item_missing_rate: 0.05
+
+  # Maximum proportion of missing responses per participant before a warning.
+  # E.g. 0.20 = warn if a participant skipped >20% of items on any form.
+  max_participant_missing_rate: 0.20
+
+# =============================================================================
+# Comparison figures (optional -- use RunPipeline.bat option [9] or set
+# COMPARISON_CONFIG env var and run Rscript R\run_comparison.R)
+# =============================================================================
+# This section is NOT read by the main pipeline (run_all.R).
+# It is read by run_comparison.R / 08_comparison_figures.R to generate
+# side-by-side or top-and-bottom panels comparing multiple completed runs.
+#
+# Create a separate YAML file (e.g. config/comparison_pilot.yml) that
+# contains only this section, then set:
+#   $env:COMPARISON_CONFIG = "config\comparison_pilot.yml"
+# before running Rscript R\run_comparison.R  -- or use RunPipeline.bat option [9].
+# -----------------------------------------------------------------------------
+# comparison:
+#
+#   # Completed pipeline runs to compare.
+#   # 'name' must match the study.name used when that run was executed
+#   # (i.e. the output directory name under outputs/).
+#   runs:
+#     - name:  "my_study_all_items"
+#       label: "All Items"
+#     - name:  "my_study_excl_x1"
+#       label: "X1 Excluded"
+#
+#   # How to arrange the panels.
+#   #   "side_by_side"  — runs left to right (wide composite)
+#   #   "top_bottom"    — runs stacked vertically (tall composite)
+#   layout: "side_by_side"
+#
+#   # Name for the output directory (created under outputs/).
+#   output_name: "comparison_my_study"
+#
+#   # Figure subfolders to process. "all" = process every subfolder.
+#   # Or list specific ones: ["primary", "period_effects"]
+#   figure_groups: "all"
+#
+#   # Label font size (points) printed above each run's column/row.
+#   label_font_size: 28
+#
+#   # Output PNG resolution.
+#   dpi: 300

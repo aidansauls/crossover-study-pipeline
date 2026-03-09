@@ -1,0 +1,19 @@
+# Normalize line endings on commit; check out as-is on Windows
+* text=auto
+
+# R scripts -- LF on all platforms
+*.R    text eol=lf
+*.Rmd  text eol=lf
+
+# Batch files must stay CRLF on Windows
+*.bat  text eol=crlf
+
+# Config / markup
+*.yml  text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+
+# Binaries
+*.png  binary
+*.rds  binary
+*.RData binary

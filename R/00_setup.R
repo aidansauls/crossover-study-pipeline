@@ -138,6 +138,7 @@ read_config <- function() {
     columns = list(
       participant_id = "Participant_ID",
       intervention_order = "Intervention_Order",
+      control_order = "Control_Order",
       form_x_order = "X_Order",
       form_y_order = "Y_Order",
       time_taken = "Time_taken"
@@ -464,6 +465,10 @@ standardize_assignment_cols <- function(df) {
       tolower(cfg$columns$intervention_order %||% "intervention_order"),
       "intervention_order", "ai_order", "treatment_order", "condition_order"
     ),
+    control_order = c(
+      tolower(cfg$columns$control_order %||% "control_order"),
+      "control_order", "ctl_order"
+    ),
     form_x_order = c(
       tolower(cfg$columns$form_x_order %||% "x_order"),
       "form_x_order", "x_order", "formx_order"
@@ -486,18 +491,6 @@ standardize_assignment_cols <- function(df) {
       stop("Cannot find column for '", canon,
            "' in assignment.csv\nTried: ", paste(aliases[[canon]], collapse = ", "),
            "\nFound: ", paste(names(df_lower), collapse = ", "))
-    }
-  }
-
-  # Optional: control_order (silently standardise if present; no error if absent)
-  if (!"control_order" %in% names(df_lower)) {
-    .co_aliases <- unique(c(
-      tolower(cfg$columns$control_order %||% "control_order"),
-      "control_order", "ctl_order"
-    ))
-    found_co <- intersect(.co_aliases, names(df_lower))
-    if (length(found_co) > 0) {
-      df_lower <- dplyr::rename(df_lower, control_order = dplyr::all_of(found_co[1]))
     }
   }
 

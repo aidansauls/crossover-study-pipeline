@@ -93,29 +93,14 @@ if (length(.extra_assign_cols) > 0) {
 assignment <- assignment |>
   dplyr::mutate(
     intervention_period = order_to_period(.data$intervention_order),
+    control_period      = order_to_period(.data$control_order),
     form_x_period       = order_to_period(.data$form_x_order),
-    form_y_period       = order_to_period(.data$form_y_order),
-    control_period      = dplyr::case_when(
-      intervention_period == 1L ~ 2L,
-      intervention_period == 2L ~ 1L,
-      TRUE ~ NA_integer_
-    )
+    form_y_period       = order_to_period(.data$form_y_order)
   )
-
-# If an explicit control_order column was provided, validate it matches
-if ("control_order" %in% names(assignment)) {
-  .ctrl_parsed <- order_to_period(assignment$control_order)
-  .bad_ctrl    <- which(!is.na(.ctrl_parsed) &
-                          .ctrl_parsed != assignment$control_period)
-  if (length(.bad_ctrl) > 0) {
-    log_warn("control_order conflicts with intervention_order for participant(s): ",
-             paste(assignment$participant[.bad_ctrl], collapse = ", "),
-             " — control_period derived from intervention_order.")
-  }
-}
 
 bad_rows <- dplyr::filter(assignment,
   is.na(.data$intervention_period) |
+  is.na(.data$control_period) |
   is.na(.data$form_x_period) |
   is.na(.data$form_y_period))
 

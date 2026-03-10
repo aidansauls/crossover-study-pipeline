@@ -1,54 +1,43 @@
-# Study Data Directory
+# study_data/
 
-This directory contains CSV data files for different studies.
+Place your study data here. This folder is not committed to the repository --
+participant data should never be version-controlled.
 
-## Structure
+## Folder structure
 
-Each study has its own subdirectory:
-- `pilot/` - Pilot study data (n=11, 20 questions, no demographics/SF-36)
-- `current/` - Ongoing data collection (will be created when you archive CSVs)
-- `study1/`, `study2/`, etc. - Future studies
+Create one subfolder per study, with the subfolder name matching the `study.name`
+value in your config file:
 
-## Data Export Workflow
+```
+study_data/
+  my_study/
+    assignment.csv
+    posttest_x_items.csv
+    posttest_y_items.csv
+```
 
-1. **Export from Python app:**
-   ```powershell
-   cd C:\Users\fertn\OneDrive\Desktop\Research\study_app
-   .\.venv\Scripts\Activate.ps1
-   python export_to_csv.py
-   ```
-   This creates CSVs in the pipeline folder (parent directory)
+## Required files
 
-2. **Run R analysis:**
-   ```powershell
-   cd ..\crossover-study-pipeline
-   $env:STUDY_NAME = "current"  # or "pilot", etc.
-   Rscript run_all.R
-   ```
+| File | Description |
+|---|---|
+| `assignment.csv` | Participant group assignments (one row per participant) |
+| `posttest_x_items.csv` | Item-level responses for Posttest X |
+| `posttest_y_items.csv` | Item-level responses for Posttest Y |
 
-3. **Archive CSVs (optional):**
-   ```powershell
-   # After analysis completes
-   Move-Item ..\crossover-study-pipeline\*.csv current\
-   ```
+See [README section 3](../README.md#3-preparing-your-data) for the required column
+format for each file.
 
-## Pilot Study
+## Pointing the pipeline at your data
 
-Location: `study_data/pilot/`
+Use `RunPipeline.bat` and choose option [1] (automatic scan) or [2] (manual path).
+Alternatively, set the environment variable before running:
 
-Files:
-- assignment.csv (11 participants)
-- posttest_x_items.csv (20 questions)
-- posttest_y_items.csv (20 questions)
-- README.txt (documentation)
+```powershell
+$env:STUDY_DATA_PATH = "study_data\my_study"
+```
 
-**Note:** Pilot has 20 questions and no demographics/SF-36 data.
+## Example data
 
-## Current/Future Studies
-
-When you export data and run analysis:
-- CSVs will have 25 questions
-- Demographics and SF-36 data included (if collected)
-- Archive to `study_data/current/` or appropriate folder
-
-See the root `README.md` for complete workflow details.
+The `example_data/` folder (in the repo root) contains a ready-to-run 100-participant
+dataset. Run it with `example_data.yml` to verify your R environment is set up
+correctly before using your own data.

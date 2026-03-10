@@ -116,8 +116,32 @@ The scanner looks for subfolders of `study_data/` that contain all three require
 
 ---
 
-## Example data
+## Example dataset
 
-The `example_data/` folder (in the repo root) contains a ready-to-run 100-participant
-dataset. Run it with `example_data.yml` to verify your R environment is set up
-correctly before using your own data.
+A fully-synthetic example dataset is included in this folder at `study_data/example_data/`.
+It is the fastest way to verify your R environment is set up correctly before
+working with your own data.
+
+**What it contains:**
+
+| File | Description |
+|---|---|
+| `assignment.csv` | 100 synthetic participants with randomised condition and form order |
+| `posttest_x_items.csv` | Responses to 15 binary items on Form X |
+| `posttest_y_items.csv` | Responses to 15 binary items on Form Y |
+
+**How to run it:**
+
+The easiest way is `RunPipeline.bat` option [1] — the automatic scanner will find
+`study_data/example_data/` and list it alongside any real studies you have. Select
+it and choose `config/example_data.yml` when prompted.
+
+Alternatively, from a terminal:
+
+```powershell
+$env:PIPELINE_CONFIG = "config\example_data.yml"
+$env:STUDY_DATA_PATH = "study_data\example_data"
+Rscript R\run_all.R
+```
+
+Outputs will appear in `outputs/example_data/`.

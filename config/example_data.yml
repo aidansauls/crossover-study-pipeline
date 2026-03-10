@@ -2,7 +2,7 @@
 # example_data.yml
 # Example dataset bundled with the repo.
 # Run:  $env:PIPELINE_CONFIG = "config\example_data.yml"
-#       $env:STUDY_DATA_PATH = "example_data"
+#       $env:STUDY_DATA_PATH = "study_data\example_data"
 #       Rscript R\run_all.R
 # =============================================================================
 
@@ -16,6 +16,7 @@ study:
 columns:
   participant_id: "Participant_ID"
   intervention_order: "Intervention_Order"
+  control_order: "Control_Order"
   form_x_order: "X_Order"
   form_y_order: "Y_Order"
   time_taken: "Time_taken"

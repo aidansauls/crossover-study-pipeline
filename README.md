@@ -51,11 +51,13 @@ to run it.
 4. **Double-click `RunPipeline.bat`** and follow the prompts
 
 Outputs land in `outputs/<study_name>/`.
-To verify everything works first, run with the bundled 100-participant example:
+To verify everything works first, run with the bundled 100-participant example
+dataset in `study_data/example_data/`. Either double-click `RunPipeline.bat`,
+choose option [1], and select `example_data` from the list -- or from a terminal:
 
 ```powershell
 $env:PIPELINE_CONFIG = "config\example_data.yml"
-$env:STUDY_DATA_PATH = "example_data"
+$env:STUDY_DATA_PATH = "study_data\example_data"
 Rscript R\run_all.R
 ```
 
@@ -143,7 +145,7 @@ Three CSV files are required in your data folder.
 Item columns are detected automatically from the header -- any column that is not
 `Participant_ID` or `Time_taken` is treated as an item column.
 
-See [`example_data/`](example_data/) for ready-to-run sample files (100 participants, 15 items per form).
+See [`study_data/example_data/`](study_data/example_data/) for ready-to-run sample files (100 participants, 15 items per form).
 
 ---
 

@@ -380,6 +380,21 @@ pushd "!PIPELINE_ROOT!"
 "!RSCRIPT!" --vanilla "%PIPELINE_ROOT%\R\run_all.R"
 set "EXIT_CODE=!ERRORLEVEL!"
 popd
+echo.
+echo  ================================================================
+if "!EXIT_CODE!"=="0" (
+    echo   RUN COMPLETE: !STUDY_NAME!
+    echo  ================================================================
+    echo.
+    echo   Output location: %PIPELINE_ROOT%\outputs\!STUDY_NAME!\
+    echo.
+) else (
+    echo   RUN FAILED  ^(exit code: !EXIT_CODE!^)
+    echo  ================================================================
+    echo.
+    echo   Check outputs\!STUDY_NAME!\logs\ for error details.
+    echo.
+)
 goto :POST_RUN_MENU
 
 :: =============================================================================
@@ -450,10 +465,8 @@ if !_SEL_COUNT! GEQ 2 goto :_M9I_OPTIONAL
 set /a "_M9I_NEXT=_SEL_COUNT+1"
 set "_PKS="
 set /p "_PKS=  Run !_M9I_NEXT! [number]: "
-if "!_PKS!"=="" (
-    echo  At least 2 runs required.
-    goto :_M9I_PICK
-)
+if "!_PKS!"=="" echo  At least 2 runs required.
+if "!_PKS!"=="" goto :_M9I_PICK
 goto :_M9I_VALIDATE
 
 :_M9I_OPTIONAL
@@ -465,10 +478,8 @@ if "!_PKS!"=="" goto :_M9I_PICK_DONE
 :_M9I_VALIDATE
 set "_VALID_PKS=0"
 for /l %%I in (1,1,!_OUT_COUNT!) do if "%%I"=="!_PKS!" set "_VALID_PKS=1"
-if "!_VALID_PKS!"=="0" (
-    echo  Not a valid number (1-!_OUT_COUNT!).
-    goto :_M9I_PICK
-)
+if "!_VALID_PKS!"=="0" echo  Not a valid number (1-!_OUT_COUNT!).
+if "!_VALID_PKS!"=="0" goto :_M9I_PICK
 :: Duplicate check
 set "_DUPE=0"
 set /a "_M9I_DI=1"
@@ -480,15 +491,13 @@ if "!_M9I_EN!"=="!_M9I_CN!" set "_DUPE=1"
 set /a _M9I_DI+=1
 goto :_M9I_DC
 :_M9I_DC_END
-if "!_DUPE!"=="1" (
-    echo  Already in list.
-    goto :_M9I_PICK
-)
+if "!_DUPE!"=="1" echo  Already in list.
+if "!_DUPE!"=="1" goto :_M9I_PICK
 :: Store selection, prompt for label
 set /a _SEL_COUNT+=1
 call set "_SEL_!_SEL_COUNT!_NAME=%%_OUT_!_PKS!%%"
 call set "_M9I_DEF=%%_OUT_!_PKS!%%"
-set /p "_LBL=  Label for "!_M9I_DEF!" [!_M9I_DEF!]: "
+set /p "_LBL=  Label [!_M9I_DEF!]: "
 if "!_LBL!"=="" set "_LBL=!_M9I_DEF!"
 set "_SEL_!_SEL_COUNT!_LABEL=!_LBL!"
 goto :_M9I_PICK
@@ -516,16 +525,17 @@ echo.
 set "_SAVE_YML="
 set /p "_SAVE_YML=  Save as a reusable comparison config? [Y/n]: "
 if "!_SAVE_YML!"=="" set "_SAVE_YML=Y"
-if /i "!_SAVE_YML!"=="n" (
-    set "_YAML_PATH=%PIPELINE_ROOT%\config\_comparison_temp.yml"
-    set "_DELETE_YAML=1"
-    goto :_M9I_WRITE_YAML
-)
-set "_YAML_DEFAULT=comparison_!_CMP_OUTNAME!"
+if /i "!_SAVE_YML!"=="n" goto :_M9I_TEMP_YAML
+:: Y path — prompt for filename
+set "_YAML_DEFAULT=!_CMP_OUTNAME!"
 set /p "_YAML_FNAME=  Filename without .yml [!_YAML_DEFAULT!]: "
 if "!_YAML_FNAME!"=="" set "_YAML_FNAME=!_YAML_DEFAULT!"
 set "_YAML_PATH=%PIPELINE_ROOT%\config\!_YAML_FNAME!.yml"
 set "_DELETE_YAML=0"
+goto :_M9I_WRITE_YAML
+:_M9I_TEMP_YAML
+set "_YAML_PATH=%PIPELINE_ROOT%\config\_comparison_temp.yml"
+set "_DELETE_YAML=1"
 
 :_M9I_WRITE_YAML
 (
@@ -649,15 +659,21 @@ if "!_DELETE_YAML!"=="1" del "!COMP_CONFIG!" 2>nul
 if "!_CE9!"=="0" (
     echo.
     echo  [OK] Comparison complete.
+    if not "!_CMP_OUTNAME!"=="" (
+        echo  Outputs written to: %PIPELINE_ROOT%\outputs\!_CMP_OUTNAME!\
+    ) else (
+        echo  Outputs written to: %PIPELINE_ROOT%\outputs\
+    )
     echo.
     explorer "%PIPELINE_ROOT%\outputs"
 ) else (
     echo.
-    echo  [ERROR] Comparison pipeline failed (exit code !_CE9!).
+    echo  [ERROR] Comparison pipeline failed ^(exit code !_CE9!^).
     echo  Check outputs for details.
     echo.
 )
-pause
+echo.
+set /p "_M9WAIT=  Press Enter to return to the main menu. "
 goto :MAIN_MENU
 
 :: =============================================================================
@@ -667,10 +683,8 @@ goto :MAIN_MENU
 
 :: Item exclusions prompt (for modes 1 & 2)
 :PROMPT_ITEM_EXCLUSIONS
-if not "!ARG_EXCL!"=="" (
-    set "ITEM_EXCL=!ARG_EXCL!"
-    goto :PROMPT_STUDY_NAME_2
-)
+if not "!ARG_EXCL!"=="" set "ITEM_EXCL=!ARG_EXCL!"
+if not "!ARG_EXCL!"=="" goto :PROMPT_STUDY_NAME_2
 echo.
 echo  Run type:
 echo    [1] Single analysis
@@ -688,16 +702,15 @@ echo.
 set /p "ITEM_EXCL=  Exclusions: "
 
 :PROMPT_STUDY_NAME_2
-if not "!ARG_STUDY!"=="" (
-    set "STUDY_NAME=!ARG_STUDY!"
-    goto :SHOW_CONFIG
-)
+if not "!ARG_STUDY!"=="" set "STUDY_NAME=!ARG_STUDY!"
+if not "!ARG_STUDY!"=="" goto :SHOW_CONFIG
 
 :: Derive default study name from folder
 for %%D in ("!DATA_FOLDER!") do set "DEFAULT_STUDY=%%~nxD"
 echo.
 set /p "STUDY_NAME=  Study name for output folder [!DEFAULT_STUDY!]: "
 if "!STUDY_NAME!"=="" set "STUDY_NAME=!DEFAULT_STUDY!"
+goto :SHOW_CONFIG
 
 :: =============================================================================
 :: MULTI-RUN SETUP  (multiple exclusion variants, one pipeline run per set)
@@ -743,11 +756,9 @@ if /i "!ES!"=="none" (
 goto :_MR_COLLECT
 
 :_MR_COLLECT_DONE
-if !EXCL_COUNT! == 0 (
-    echo.
-    echo  No variants entered. Switching to single-run mode.
-    goto :PROMPT_STUDY_NAME_2
-)
+if !EXCL_COUNT! == 0 echo.
+if !EXCL_COUNT! == 0 echo  No variants entered. Switching to single-run mode.
+if !EXCL_COUNT! == 0 goto :PROMPT_STUDY_NAME_2
 
 :: Show planned runs
 echo.
@@ -1108,6 +1119,7 @@ if "!_AC_EC!"=="0" (
     echo.
     echo  [ERROR] Comparison failed ^(exit code !_AC_EC!^). Check outputs for details.
 )
+echo.
 goto :EOF
 
 :FIND_RSCRIPT

@@ -207,7 +207,7 @@ for (.carry in list(carryover_full, carryover_restr)) {
     mean_B           = round(.carry$mean_b, 4),
     sd_B             = round(.carry$sd_b,   4),
     t_statistic      = round(.carry$t, 4),
-    p_value          = fmt_p(.carry$p),
+    p_value          = sub("^= ", "", fmt_p(.carry$p)),
     interpretation   = .carry$interpretation
   )
 }
@@ -299,7 +299,7 @@ for (.spi in list(seq_period_full, seq_period_restr)) {
     mean_period_diff_BA     = round(.spi$mean_diff_ba, 4),
     sd_period_diff_BA       = round(.spi$sd_diff_ba,   4),
     t_statistic             = round(.spi$t, 4),
-    p_value                 = fmt_p(.spi$p),
+    p_value                 = sub("^= ", "", fmt_p(.spi$p)),
     interpretation          = .spi$interpretation
   )
 }
@@ -400,7 +400,7 @@ for (.pi in list(period_int_full, period_int_restr)) {
     mean_int_minus_ctl_P2 = round(.pi$mean_diff_int_p2, 4),
     sd_int_minus_ctl_P2  = round(.pi$sd_diff_int_p2,   4),
     t_statistic          = round(.pi$t, 4),
-    p_value              = fmt_p(.pi$p),
+    p_value              = sub("^= ", "", fmt_p(.pi$p)),
     interpretation       = .pi$interpretation
   )
 }
@@ -467,7 +467,7 @@ if (requireNamespace("lme4", quietly = TRUE) &&
   
   run_lmer <- function(scoring) {
     long_sub <- dat_long |>
-      dplyr::filter(.data$scoring == scoring,
+      dplyr::filter(.data$scoring == .env$scoring,
                     .data$context %in% c("intervention", "control")) |>
       dplyr::mutate(
         condition_fac = factor(.data$condition,
@@ -573,7 +573,7 @@ if (requireNamespace("lme4", quietly = TRUE) &&
         log_line("  Model comparison (AIC / LRT):")
         log_line(sprintf("    Model 1 AIC=%.2f  BIC=%.2f",
           comp_df$AIC[1], comp_df$BIC[1]))
-        log_line(sprintf("    Model 2 AIC=%.2f  BIC=%.2f  Chi2=%.3f  p=%s",
+        log_line(sprintf("    Model 2 AIC=%.2f  BIC=%.2f  Chi2=%.3f  p %s",
           comp_df$AIC[2], comp_df$BIC[2],
           comp_df$Chisq[2] %||% NA_real_,
           fmt_p(comp_df[["Pr(>Chisq)"]][2])))

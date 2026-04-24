@@ -210,7 +210,7 @@ if (dir.exists(out_root)) {
                               pattern = "\\.png$", recursive = TRUE))
   n_csv <- length(list.files(file.path(out_root, "tables"),
                               pattern = "\\.csv$", recursive = TRUE))
-  n_png <- length(list.files(file.path(out_root, "tables"),
+  n_png <- length(list.files(file.path(out_root, "tables_png"),
                               pattern = "\\.png$", recursive = TRUE))
   cat(sprintf("  Output: %s\n", out_root))
   cat(sprintf("  Figures (PNG):  %d\n", n_fig))

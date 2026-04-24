@@ -334,7 +334,7 @@ log_paired_result <- function(res) {
     `Cohen's dz`        = round(res$dz, 4L),
     `t-statistic`       = round(res$t,  4L),
     df                  = res$n - 1L,
-    `p-value`           = fmt_p(res$p),
+    `p-value`           = sub("^= ", "", fmt_p(res$p)),
     significant_a0.05   = if (!is.na(res$p)) res$p < 0.05 else NA
   )
 }

@@ -80,7 +80,8 @@ if ("time_taken_x_sec" %in% names(x_items)) {
     by = "participant")
 }
 
-x_scores <- dplyr::select(x_scores, participant, dplyr::starts_with("x_"))
+x_scores <- dplyr::select(x_scores, participant, dplyr::starts_with("x_"),
+                          dplyr::any_of("time_taken_x_sec"))
 log_check("X scores: mean_full=", round(mean(x_scores$x_score_full), 2),
           " | mean_restricted=", round(mean(x_scores$x_score_restricted), 2))
 log_calc("X score (full)",
@@ -143,7 +144,8 @@ if ("time_taken_y_sec" %in% names(y_items)) {
     by = "participant")
 }
 
-y_scores <- dplyr::select(y_scores, participant, dplyr::starts_with("y_"))
+y_scores <- dplyr::select(y_scores, participant, dplyr::starts_with("y_"),
+                          dplyr::any_of("time_taken_y_sec"))
 log_check("Y scores: mean_full=", round(mean(y_scores$y_score_full), 2),
           " | mean_restricted=", round(mean(y_scores$y_score_restricted), 2))
 log_calc("Y score (full)",

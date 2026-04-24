@@ -386,10 +386,211 @@ goto :POST_RUN_MENU
 :: MODE 9 — Run comparison figures
 :: =============================================================================
 :MODE_9
+set "_DELETE_YAML=0"
+set "COMP_CONFIG="
 echo.
-echo  ---- Run Comparison Figures ----
+echo  ---- Run Comparison ----
 echo.
-echo  Comparison configs in config\:
+echo  Setup options:
+echo    [1] Build comparison interactively  (pick runs, assign labels)
+echo    [2] Use a saved comparison config
+echo    [M] Enter a custom config path
+echo.
+set /p "_M9C=  Choice [1]: "
+if "!_M9C!"=="" set "_M9C=1"
+if "!_M9C!"=="1" goto :M9_INTERACTIVE
+if "!_M9C!"=="2" goto :M9_YAML
+if /i "!_M9C!"=="M" goto :M9_CUSTOM
+echo  Invalid choice.
+goto :MODE_9
+
+:: ---------------------------------------------------------------------------
+:: M9_INTERACTIVE — guided setup: pick runs, assign labels, choose groups
+:: ---------------------------------------------------------------------------
+:M9_INTERACTIVE
+echo.
+echo  ---- Interactive Comparison Setup ----
+echo.
+echo  Available run output folders:
+echo.
+set "_OUT_COUNT=0"
+for /d %%D in ("%PIPELINE_ROOT%\outputs\*") do (
+    set /a _OUT_COUNT+=1
+    set "_OUT_!_OUT_COUNT!=%%~nxD"
+    echo    [!_OUT_COUNT!] %%~nxD
+)
+if !_OUT_COUNT! == 0 (
+    echo  No output folders found. Run a standard analysis first.
+    echo.
+    pause
+    goto :MAIN_MENU
+)
+echo.
+echo  Select runs to compare (minimum 2). Enter a run number, then Enter.
+echo  Press Enter on a blank line when done.
+echo.
+set "_SEL_COUNT=0"
+
+:_M9I_PICK
+if !_SEL_COUNT! EQU 0 goto :_M9I_NO_SHOW
+echo  Runs selected so far:
+set /a "_M9I_SI=1"
+:_M9I_SH
+if !_M9I_SI! GTR !_SEL_COUNT! goto :_M9I_SH_END
+call set "_M9I_SN=%%_SEL_!_M9I_SI!_NAME%%"
+call set "_M9I_SL=%%_SEL_!_M9I_SI!_LABEL%%"
+echo    !_M9I_SI!. !_M9I_SN!  [!_M9I_SL!]
+set /a _M9I_SI+=1
+goto :_M9I_SH
+:_M9I_SH_END
+echo.
+
+:_M9I_NO_SHOW
+if !_SEL_COUNT! GEQ 2 goto :_M9I_OPTIONAL
+set /a "_M9I_NEXT=_SEL_COUNT+1"
+set "_PKS="
+set /p "_PKS=  Run !_M9I_NEXT! [number]: "
+if "!_PKS!"=="" (
+    echo  At least 2 runs required.
+    goto :_M9I_PICK
+)
+goto :_M9I_VALIDATE
+
+:_M9I_OPTIONAL
+set /a "_M9I_NEXT=_SEL_COUNT+1"
+set "_PKS="
+set /p "_PKS=  Add run !_M9I_NEXT! [number, or Enter to finish]: "
+if "!_PKS!"=="" goto :_M9I_PICK_DONE
+
+:_M9I_VALIDATE
+set "_VALID_PKS=0"
+for /l %%I in (1,1,!_OUT_COUNT!) do if "%%I"=="!_PKS!" set "_VALID_PKS=1"
+if "!_VALID_PKS!"=="0" (
+    echo  Not a valid number (1-!_OUT_COUNT!).
+    goto :_M9I_PICK
+)
+:: Duplicate check
+set "_DUPE=0"
+set /a "_M9I_DI=1"
+:_M9I_DC
+if !_M9I_DI! GTR !_SEL_COUNT! goto :_M9I_DC_END
+call set "_M9I_EN=%%_SEL_!_M9I_DI!_NAME%%"
+call set "_M9I_CN=%%_OUT_!_PKS!%%"
+if "!_M9I_EN!"=="!_M9I_CN!" set "_DUPE=1"
+set /a _M9I_DI+=1
+goto :_M9I_DC
+:_M9I_DC_END
+if "!_DUPE!"=="1" (
+    echo  Already in list.
+    goto :_M9I_PICK
+)
+:: Store selection, prompt for label
+set /a _SEL_COUNT+=1
+call set "_SEL_!_SEL_COUNT!_NAME=%%_OUT_!_PKS!%%"
+call set "_M9I_DEF=%%_OUT_!_PKS!%%"
+set /p "_LBL=  Label for "!_M9I_DEF!" [!_M9I_DEF!]: "
+if "!_LBL!"=="" set "_LBL=!_M9I_DEF!"
+set "_SEL_!_SEL_COUNT!_LABEL=!_LBL!"
+goto :_M9I_PICK
+
+:_M9I_PICK_DONE
+:: Output folder name
+echo.
+set "_CMP_DEFAULT_OUT=comparison_custom"
+set /p "_CMP_OUTNAME=  Output folder name [!_CMP_DEFAULT_OUT!]: "
+if "!_CMP_OUTNAME!"=="" set "_CMP_OUTNAME=!_CMP_DEFAULT_OUT!"
+
+:: Figure groups
+echo.
+echo  Figure groups to stitch:
+echo    [A] All subfolders
+echo    [P] Primary + Mixed Models + Psychometrics  (recommended)
+echo    [C] Custom  (enter comma-separated names, e.g. primary,mixed_models)
+echo.
+set "_FG="
+set /p "_FG=  Choice [P]: "
+if "!_FG!"=="" set "_FG=P"
+
+:: Save as reusable YAML?
+echo.
+set "_SAVE_YML="
+set /p "_SAVE_YML=  Save as a reusable comparison config? [Y/n]: "
+if "!_SAVE_YML!"=="" set "_SAVE_YML=Y"
+if /i "!_SAVE_YML!"=="n" (
+    set "_YAML_PATH=%PIPELINE_ROOT%\config\_comparison_temp.yml"
+    set "_DELETE_YAML=1"
+    goto :_M9I_WRITE_YAML
+)
+set "_YAML_DEFAULT=comparison_!_CMP_OUTNAME!"
+set /p "_YAML_FNAME=  Filename without .yml [!_YAML_DEFAULT!]: "
+if "!_YAML_FNAME!"=="" set "_YAML_FNAME=!_YAML_DEFAULT!"
+set "_YAML_PATH=%PIPELINE_ROOT%\config\!_YAML_FNAME!.yml"
+set "_DELETE_YAML=0"
+
+:_M9I_WRITE_YAML
+(
+echo comparison:
+echo   runs:
+) > "!_YAML_PATH!"
+set /a "_M9I_YI=1"
+:_M9I_YL
+if !_M9I_YI! GTR !_SEL_COUNT! goto :_M9I_YL_END
+call set "_M9I_YN=%%_SEL_!_M9I_YI!_NAME%%"
+call set "_M9I_YL=%%_SEL_!_M9I_YI!_LABEL%%"
+(
+echo     - name:  "!_M9I_YN!"
+echo       label: "!_M9I_YL!"
+) >> "!_YAML_PATH!"
+set /a _M9I_YI+=1
+goto :_M9I_YL
+:_M9I_YL_END
+(
+echo   layout:       "side_by_side"
+echo   output_name:  "!_CMP_OUTNAME!"
+echo   common_scale: false
+echo   dpi:          300
+echo   label_font_size: 28
+) >> "!_YAML_PATH!"
+
+if /i "!_FG!"=="A" goto :_M9I_FG_ALL
+if /i "!_FG!"=="C" goto :_M9I_FG_CUSTOM
+:: default = P
+(
+echo   figure_groups:
+echo     - "primary"
+echo     - "mixed_models"
+echo     - "psychometrics"
+) >> "!_YAML_PATH!"
+goto :_M9I_FG_DONE
+
+:_M9I_FG_ALL
+echo   figure_groups: "all"  >> "!_YAML_PATH!"
+goto :_M9I_FG_DONE
+
+:_M9I_FG_CUSTOM
+set "_CGRPS="
+set /p "_CGRPS=  Group names (comma-separated, e.g. primary,mixed_models): "
+echo   figure_groups:  >> "!_YAML_PATH!"
+set "_CGRPS_SPC=!_CGRPS:,= !"
+for %%G in (!_CGRPS_SPC!) do echo     - "%%G"  >> "!_YAML_PATH!"
+
+:_M9I_FG_DONE
+set "COMP_CONFIG=!_YAML_PATH!"
+if "!_DELETE_YAML!"=="1" (
+    echo.
+    echo  [Config written (temporary): !_YAML_PATH!]
+) else (
+    echo.
+    echo  [Config saved: !_YAML_PATH!]
+)
+goto :_COMP_RUN_M9
+
+:: ---------------------------------------------------------------------------
+:: M9_YAML — pick from existing comparison_*.yml files
+:: ---------------------------------------------------------------------------
+:M9_YAML
+echo.
+echo  Saved comparison configs in config\:
 echo.
 set "COMP_COUNT=0"
 for %%F in ("%PIPELINE_ROOT%\config\comparison_*.yml") do (
@@ -398,28 +599,36 @@ for %%F in ("%PIPELINE_ROOT%\config\comparison_*.yml") do (
     echo    [!COMP_COUNT!] %%~nxF
 )
 if !COMP_COUNT! == 0 (
-    echo  None found. Create a comparison_*.yml in config\ first.
-    echo  See README section 6 for the YAML format, or run Mode 1/2 with
-    echo  multiple variants -- the BAT will generate a starter YAML for you.
+    echo  No saved configs found. Use option [1] to build one interactively.
     echo.
     pause
-    goto :MAIN_MENU
+    goto :MODE_9
 )
-echo    [M] Enter custom path
 echo.
 set /p "CC=  Select [1]: "
 if "!CC!"=="" set "CC=1"
-if /i "!CC!"=="M" (
-    set /p "COMP_CONFIG=  Path to comparison config: "
-    set "COMP_CONFIG=!COMP_CONFIG:"=!"
-) else (
-    set "COMP_CONFIG="
-    for /l %%I in (1,1,!COMP_COUNT!) do (
-        if "%%I"=="!CC!" set "COMP_CONFIG=!COMP_%%I!"
-    )
-)
+set "COMP_CONFIG="
+for /l %%I in (1,1,!COMP_COUNT!) do if "%%I"=="!CC!" set "COMP_CONFIG=!COMP_%%I!"
 if "!COMP_CONFIG!"=="" (
     echo  Invalid selection.
+    pause
+    goto :MODE_9
+)
+goto :_COMP_RUN_M9
+
+:: ---------------------------------------------------------------------------
+:: M9_CUSTOM — type a path
+:: ---------------------------------------------------------------------------
+:M9_CUSTOM
+set /p "COMP_CONFIG=  Path to comparison config: "
+set "COMP_CONFIG=!COMP_CONFIG:"=!"
+
+:: ---------------------------------------------------------------------------
+:: _COMP_RUN_M9 — validate and execute
+:: ---------------------------------------------------------------------------
+:_COMP_RUN_M9
+if "!COMP_CONFIG!"=="" (
+    echo  No config specified.
     pause
     goto :MAIN_MENU
 )
@@ -429,22 +638,23 @@ if not exist "!COMP_CONFIG!" (
     goto :MAIN_MENU
 )
 echo.
-echo  Running comparison pipeline...
+echo  Running comparison...
 echo.
-pushd "!PIPELINE_ROOT!"
 set "COMPARISON_CONFIG=!COMP_CONFIG!"
+pushd "!PIPELINE_ROOT!"
 "!RSCRIPT!" --vanilla "%PIPELINE_ROOT%\R\run_comparison.R"
 set "_CE9=!ERRORLEVEL!"
 popd
+if "!_DELETE_YAML!"=="1" del "!COMP_CONFIG!" 2>nul
 if "!_CE9!"=="0" (
     echo.
-    echo  [OK] Comparison figures complete.
+    echo  [OK] Comparison complete.
     echo.
     explorer "%PIPELINE_ROOT%\outputs"
 ) else (
     echo.
     echo  [ERROR] Comparison pipeline failed (exit code !_CE9!).
-    echo  Check the logs in outputs\ for details.
+    echo  Check outputs for details.
     echo.
 )
 pause
@@ -650,26 +860,8 @@ goto :_MR_SUMLOOP
 
 if !_MR_OK! GTR 1 (
     echo.
-    echo  To generate comparison figures, create a comparison config YAML
-    echo  and run option [9] in RunPipeline.bat. See README section 6 for the YAML format.
-    echo.
-    echo  Quick-start YAML ^(save as config\comparison_!BASE_STUDY!.yml^):
-    echo.
-    echo    comparison:
-    echo      runs:
-    set "_CLI=1"
-    :_MR_COMPLOOP
-    if !_CLI! GTR !EXCL_COUNT! goto :_MR_COMPLOOP_DONE
-    call set "_CLN=%%VARIANT_NAME_!_CLI!%%"
-    call set "_CLE=%%EXCL_SET_!_CLI!%%"
-    echo          - name:  "!_CLN!"
-    echo            label: "!_CLE!"
-    set /a _CLI+=1
-    goto :_MR_COMPLOOP
-    :_MR_COMPLOOP_DONE
-    echo      layout: "side_by_side"
-    echo      output_name: "comparison_!BASE_STUDY!"
-    echo.
+    set /p "_MRQ=  Generate cross-run comparison now? [Y/n]: "
+    if /i "!_MRQ!" neq "n" call :_AUTO_COMPARE
 )
 :: Save last-run variant for Mode 8 rerun
 set "LAST_STUDY_NAME=!_CN!"
@@ -863,6 +1055,60 @@ goto :POST_RUN_MENU
 :: =============================================================================
 :: SUBROUTINES
 :: =============================================================================
+
+:: =============================================================================
+:: _AUTO_COMPARE — auto-generate comparison from just-finished multi-run variants
+:: Called via CALL from _MR_RUNDONE; returns when done (goto :EOF)
+:: =============================================================================
+:_AUTO_COMPARE
+set "_AC_YAML=%PIPELINE_ROOT%\config\_comparison_temp.yml"
+set "_AC_OUT=comparison_!BASE_STUDY!"
+(
+echo comparison:
+echo   runs:
+) > "!_AC_YAML!"
+set /a "_AC_I=1"
+:_AC_LOOP
+if !_AC_I! GTR !EXCL_COUNT! goto :_AC_LOOP_END
+call set "_AC_N=%%VARIANT_NAME_!_AC_I!%%"
+call set "_AC_E=%%EXCL_SET_!_AC_I!%%"
+set "_AC_L=!_AC_E:,=+!"
+if /i "!_AC_E!"=="NONE" set "_AC_L=Full scoring"
+(
+echo     - name:  "!_AC_N!"
+echo       label: "!_AC_L!"
+) >> "!_AC_YAML!"
+set /a _AC_I+=1
+goto :_AC_LOOP
+:_AC_LOOP_END
+(
+echo   layout:       "side_by_side"
+echo   output_name:  "!_AC_OUT!"
+echo   common_scale: false
+echo   dpi:          300
+echo   label_font_size: 28
+echo   figure_groups:
+echo     - "primary"
+echo     - "mixed_models"
+echo     - "psychometrics"
+) >> "!_AC_YAML!"
+echo.
+echo  Running comparison: outputs\!_AC_OUT!\
+echo.
+set "COMPARISON_CONFIG=!_AC_YAML!"
+pushd "!PIPELINE_ROOT!"
+"!RSCRIPT!" --vanilla "%PIPELINE_ROOT%\R\run_comparison.R"
+set "_AC_EC=!ERRORLEVEL!"
+popd
+del "!_AC_YAML!" 2>nul
+if "!_AC_EC!"=="0" (
+    echo.
+    echo  [OK] Comparison complete: outputs\!_AC_OUT!\
+) else (
+    echo.
+    echo  [ERROR] Comparison failed ^(exit code !_AC_EC!^). Check outputs for details.
+)
+goto :EOF
 
 :FIND_RSCRIPT
 set "RSCRIPT="

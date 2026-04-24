@@ -123,6 +123,15 @@ read_config <- function() {
     }
   }
 
+  ## Env-var override: RUN_RESTRICTED_COMPARISON=0  to suppress Figure 9 and
+  ## Tables 13/13b (full-vs-restricted within-run comparison) when running
+  ## exclusion-variant analyses where that comparison is not the focus.
+  .env_restr_cmp <- Sys.getenv("RUN_RESTRICTED_COMPARISON", unset = "")
+  if (nzchar(.env_restr_cmp) && trimws(.env_restr_cmp) == "0") {
+    if (is.null(cfg[["optional_analyses"]])) cfg[["optional_analyses"]] <- list()
+    cfg[["optional_analyses"]][["run_restricted_comparison"]] <- FALSE
+  }
+
   cfg
 }
 

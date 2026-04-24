@@ -1,0 +1,39 @@
+# =============================================================================
+# comparison_excl_variants.yml
+# Cross-run comparison: Form Y item-exclusion sensitivity analysis
+#   Run 1: exclude item y1 only        (9-item restricted score)
+#   Run 2: exclude items y1 + y6       (8-item restricted score)
+#
+# Usage:
+#   tools\Run-Comparison.ps1            (sets COMPARISON_CONFIG automatically)
+#   — or —
+#   set COMPARISON_CONFIG=config\comparison_excl_variants.yml
+#   Rscript R\run_comparison.R
+# =============================================================================
+
+comparison:
+
+  runs:
+    - name:  "PilotData_N15_excl_y1"
+      label: "Excl y1"
+
+    - name:  "PilotData_N15_excl_y1_y6"
+      label: "Excl y1+y6"
+
+  layout:           "side_by_side"
+  output_name:      "comparison_excl_variants"
+
+  # Use existing figures — no re-render needed, keeps it fast and avoids
+  # config-mismatch issues with ITEM_EXCLUSIONS not being set at render time.
+  common_scale:     false
+
+  dpi:              300
+  label_font_size:  28
+
+  # Only stitch the figure groups affected by item exclusions.
+  # "supplementary" (Figure 9 full_vs_restricted) is intentionally excluded
+  # here because it is a within-run comparison, not between-run.
+  figure_groups:
+    - "primary"
+    - "mixed_models"
+    - "psychometrics"

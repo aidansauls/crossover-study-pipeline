@@ -545,9 +545,9 @@ if (.run_restr && .has_restr) {
       )
     )
     save_table(tbl13, "13_full_vs_restricted_comparison", subfolder = "supplementary",
-               caption = "Comparison of full and restricted scoring: means, SDs, and correlation")
+               caption = "Within-run comparison: full vs restricted scoring — means, SDs, and correlation (same dataset, same participants)")
     save_table(.es_block, "13b_full_vs_restricted_effect_sizes", subfolder = "supplementary",
-               caption = "Cohen's dz for intervention effect under full vs restricted scoring")
+               caption = "Within-run comparison: Cohen's dz for intervention effect under full vs restricted scoring (same dataset)")
   } else {
     log_warn("Restricted score columns not found \u2014 Table 13 skipped.")
   }

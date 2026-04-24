@@ -421,10 +421,12 @@ fig8 <- ggplot2::ggplot(df_dist,
 save_figure(fig8, "score_distributions_violin_box", subfolder = "descriptive")
 
 # =============================================================================
-# FIGURE 9: Restricted vs full score comparison (only if exclusions exist)
+# FIGURE 9: Restricted vs full score comparison (only if exclusions exist
+#            AND optional_analyses.run_restricted_comparison is not FALSE)
 # =============================================================================
-if (length(cfg$item_exclusions$y %||% character(0)) > 0 ||
-    length(cfg$item_exclusions$x %||% character(0)) > 0) {
+if ((length(cfg$item_exclusions$y %||% character(0)) > 0 ||
+     length(cfg$item_exclusions$x %||% character(0)) > 0) &&
+    isTRUE(cfg_get("optional_analyses", "run_restricted_comparison", default = TRUE))) {
   
   log_h2("Figure 9: Full vs restricted scoring")
   
@@ -457,7 +459,10 @@ if (length(cfg$item_exclusions$y %||% character(0)) > 0 ||
     ) +
     ggplot2::scale_y_continuous(name = score_lab, limits = c(score_y_lo, scale_to),
                                  breaks = score_y_breaks) +
-    ggplot2::xlab("Condition") +
+    ggplot2::labs(
+      x        = "Condition",
+      subtitle = "Within-run comparison — same data, full vs restricted item scoring"
+    ) +
     theme_clean() +
     ggplot2::theme(legend.position = "bottom")
   

@@ -281,4 +281,92 @@ if (common_scale)
   cat(sprintf("  Common y-axis lower bound: %d\n", global_y_lo))
 cat(strrep("=", 72), "\n")
 
+# ---------------------------------------------------------------------------
+# 8. Cross-run restricted-score summary table
+# ---------------------------------------------------------------------------
+# Reads standard pipeline tables from each run and assembles one row per run:
+#   outputs/<output_name>/tables/variant_comparison_restricted_results.csv
+.tbl_rows <- lapply(runs, function(r) {
+  run_name  <- r[["name"]]
+  run_label <- r[["label"]] %||% run_name
+
+  # -- Primary contrasts (03_primary_contrasts.csv) ---------------------------
+  contrasts_f <- file.path(outputs_dir, run_name,
+                            "tables", "primary", "03_primary_contrasts.csv")
+  if (!file.exists(contrasts_f)) {
+    message("[WARN] Primary contrasts table not found for '", run_name, "' — skipping row")
+    return(NULL)
+  }
+  contrasts <- tryCatch(
+    read.csv(contrasts_f, stringsAsFactors = FALSE, check.names = FALSE),
+    error = function(e) { message("[WARN] ", e$message); NULL }
+  )
+  if (is.null(contrasts)) return(NULL)
+
+  int_row <- contrasts[grepl("Intervention vs Control", contrasts$Contrast, fixed = TRUE) &
+                         grepl("restricted", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
+  if (nrow(int_row) == 0) {
+    message("[WARN] No restricted 'Intervention vs Control' row in '", run_name, "'")
+    return(NULL)
+  }
+  int_row <- int_row[1, ]
+
+  # -- Mixed model results (07_mixed_model_results.csv) -----------------------
+  mm_f <- file.path(outputs_dir, run_name,
+                    "tables", "mixed_models", "07_mixed_model_results.csv")
+  cond_est <- NA_real_
+  cond_p   <- NA_character_
+  if (file.exists(mm_f)) {
+    mm <- tryCatch(
+      read.csv(mm_f, stringsAsFactors = FALSE, check.names = FALSE),
+      error = function(e) NULL
+    )
+    if (!is.null(mm)) {
+      mm_row <- mm[tolower(mm$Scoring) == "restricted" &
+                     grepl("condition_fac", mm$Term, fixed = TRUE), , drop = FALSE]
+      if (nrow(mm_row) > 0) {
+        cond_est <- mm_row$Estimate[1]
+        cond_p   <- mm_row$p[1]
+      }
+    }
+  } else {
+    message("[WARN] Mixed model table not found for '", run_name, "'")
+  }
+
+  data.frame(
+    "Run"                    = run_label,
+    "N"                      = int_row[["N"]],
+    "Intervention Mean (SD)" = int_row[["Mean A (SD)"]],
+    "Control Mean (SD)"      = int_row[["Mean B (SD)"]],
+    "Mean Diff"              = int_row[["Mean Diff"]],
+    "95% CI"                 = int_row[["95% CI"]],
+    "Cohen dz"               = int_row[["Cohen dz"]],
+    "p"                      = int_row[["p"]],
+    "MM Condition Estimate"  = cond_est,
+    "MM Condition p"         = cond_p,
+    stringsAsFactors = FALSE,
+    check.names      = FALSE
+  )
+})
+
+.tbl_rows <- Filter(Negate(is.null), .tbl_rows)
+
+if (length(.tbl_rows) > 0) {
+  tbl_out_dir <- file.path(outputs_dir, out_name, "tables")
+  dir.create(tbl_out_dir, recursive = TRUE, showWarnings = FALSE)
+  tbl_path <- file.path(tbl_out_dir, "variant_comparison_restricted_results.csv")
+  write.csv(do.call(rbind, .tbl_rows), tbl_path, row.names = FALSE, quote = TRUE)
+  cat("\nCross-run restricted-score summary table:\n  ", tbl_path, "\n\n", sep = "")
+} else {
+  message("[WARN] No data rows collected — variant_comparison_restricted_results.csv not written.")
+}
+
+# --- Output audit for the comparison directory ---
+{
+  .audit_path <- file.path(r_dir, "09_audit.R")
+  if (file.exists(.audit_path))
+    tryCatch(source(.audit_path, echo = FALSE),
+             error = function(e)
+               cat("[WARN] Audit script failed:", conditionMessage(e), "\n"))
+}
 

@@ -233,5 +233,14 @@ if (exists("write_session_summary_txt", envir = .GlobalEnv)) {
                              n_skip = n_skip, total_secs = total_secs)
 }
 
+# --- Output audit ---
+{
+  .audit_path <- R_script("09_audit.R")
+  if (file.exists(.audit_path))
+    tryCatch(source(.audit_path, echo = FALSE),
+             error = function(e)
+               cat("[WARN] Audit script failed:", conditionMessage(e), "\n"))
+}
+
 # Exit with error code if any step failed
 if (n_err > 0) quit(status = 1, save = "no")

@@ -1,0 +1,57 @@
+# ==============================================================================
+# crossover-study-pipeline  .gitignore
+# ==============================================================================
+
+# ── IDE / editor ───────────────────────────────────────────────────────────────
+.vscode/
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── R binary objects (can encode participant data) ────────────────────────────
+*.rds
+*.RData
+
+# ── Log / temp files ──────────────────────────────────────────────────────────
+comparison_log*.txt
+*.log
+
+# ── renv ──────────────────────────────────────────────────────────────────────
+renv/library/
+renv/.cache/
+
+# ── Study data ─────────────────────────────────────────────────────────────────
+# Block ALL subfolders of study_data/.
+# Only the synthetic example dataset and the README are safe to push.
+study_data/*/
+!study_data/example_data/
+!study_data/example_data/**
+!study_data/README.md
+
+# ── Analysis outputs ───────────────────────────────────────────────────────────
+# Block ALL subfolders of outputs/.  Only outputs/README.md is tracked.
+outputs/*/
+!outputs/README.md
+
+# ── Internal-use tables (email maps, restricted comparison data, etc.) ─────────
+**/InternalUse/
+
+# ── Archived / superseded comparison configs ──────────────────────────────────
+config/archive/
+
+# ── Development scratch / one-off test artifacts ──────────────────────────────
+_test_*.bat
+_test_*.ps1
+_test_*.yml
+_test_*.txt
+
+# ── Stray root-level run output folders ───────────────────────────────────────
+# These should live under outputs/ — block any that land at root accidentally.
+/Comparison_*/
+
+# ── Local test clone of the repository ────────────────────────────────────────
+clone/

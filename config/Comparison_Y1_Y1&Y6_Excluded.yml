@@ -1,0 +1,13 @@
+comparison:
+  runs:
+    - name:  "PilotData_N15_excl_y1"
+      label: "Y1 Excluded"
+    - name:  "PilotData_N15_excl_y1_y6"
+      label: "Y1 & Y6 Excluded"
+  layout:       "side_by_side"
+  output_name:  "Comparison_Y1_Y1&Y6_Excluded"
+  common_scale: false
+  dpi:          300
+  label_font_size: 28
+  figure_groups: "all"
+  source_data_name: "PilotData_N15"

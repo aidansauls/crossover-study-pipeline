@@ -11,3 +11,7 @@ comparison:
   label_font_size: 28
   figure_groups: "all"
   source_data_name: "PilotData_N15"
+  # Primary/main run: source for core manuscript tables copied into the comparison
+  # package (00_overall_results, 00_study_design).  Defaults to the first run if
+  # not set.
+  primary_run:  "PilotData_N15_excl_y1"

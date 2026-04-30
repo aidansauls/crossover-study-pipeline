@@ -1728,4 +1728,112 @@ if (!is.null(.raw_data_27)) {
   log_warn("raw_data unavailable \u2014 Figure 29 (item endorsement by sequence) skipped.")
 }
 
+# =============================================================================
+# FIGURE S1: Participant flow diagram (CONSORT-style crossover design)
+# =============================================================================
+log_h2("Figure S1: Participant flow diagram")
+
+.n_s1     <- nrow(dat)
+.n_int_s1 <- sum(dat$intervention_period == 1L, na.rm = TRUE)   # intervention-first
+.n_ctl_s1 <- sum(dat$intervention_period == 2L, na.rm = TRUE)   # control-first
+
+.dot_s1 <- paste0(
+  'digraph crossover_flow {
+    graph [layout = dot, rankdir = TB, fontname = "Arial",
+           nodesep = 0.4, ranksep = 0.5]
+    node  [shape = box, style = "rounded,filled", fillcolor = white,
+           fontname = "Arial", fontsize = 14, margin = "0.15,0.10"]
+    edge  [arrowsize = 0.8]
+
+    A  [label = "Participants (n=', .n_s1, ')"]
+    B  [label = "Randomized 1:1 to order"]
+    C  [label = "Lecture (60 min)"]
+    D  [label = "', int_label, ' guidance (5-10 min)"]
+    E  [label = "Break (10-15 min)"]
+    F1 [label = "', ctl_label, ' first (n=', .n_ctl_s1, ')"]
+    F2 [label = "', int_label, ' first (n=', .n_int_s1, ')"]
+    G1 [label = "', ctl_label, ' study (20 min)"]
+    G2 [label = "', int_label, ' study (20 min)"]
+    H1 [label = "Post-test 1 (X or Y)"]
+    H2 [label = "Post-test 1 (X or Y)"]
+    I1 [label = "Break (10-15 min)"]
+    I2 [label = "Break (10-15 min)"]
+    J1 [label = "', int_label, ' study (20 min)"]
+    J2 [label = "', ctl_label, ' study (20 min)"]
+    K1 [label = "Post-test 2 (alternate form)"]
+    K2 [label = "Post-test 2 (alternate form)"]
+
+    A -> B -> C -> D -> E
+    E -> F1
+    E -> F2
+    F1 -> G1 -> H1 -> I1 -> J1 -> K1
+    F2 -> G2 -> H2 -> I2 -> J2 -> K2
+  }'
+)
+
+if (requireNamespace("DiagrammeR",  quietly = TRUE) &&
+    requireNamespace("htmlwidgets", quietly = TRUE)) {
+
+  .s1_widget <- tryCatch(
+    DiagrammeR::grViz(.dot_s1),
+    error = function(e) {
+      log_warn("Figure S1 grViz render failed: ", conditionMessage(e))
+      NULL
+    }
+  )
+
+  if (!is.null(.s1_widget)) {
+    .s1_path <- out_path(
+      Sys.getenv("FIGURES_ROOT_SUFFIX", unset = "figures"),
+      "supplementary", "figure_s1_participant_flow.png"
+    )
+    dir.create(dirname(.s1_path), recursive = TRUE, showWarnings = FALSE)
+
+    .s1_saved <- tryCatch({
+      .tmp_html <- tempfile(fileext = ".html")
+      htmlwidgets::saveWidget(.s1_widget, .tmp_html, selfcontained = FALSE)
+      on.exit(unlink(.tmp_html), add = TRUE)
+      on.exit(unlink(sub("\\.html$", "_files", .tmp_html), recursive = TRUE), add = TRUE)
+
+      if (requireNamespace("webshot2", quietly = TRUE)) {
+        webshot2::webshot(.tmp_html, file = .s1_path,
+                          vwidth = 700, vheight = 1050, zoom = 2, delay = 0.5)
+      } else if (requireNamespace("webshot", quietly = TRUE)) {
+        webshot::webshot(.tmp_html, file = .s1_path,
+                         vwidth = 700, vheight = 1050, zoom = 2, delay = 0.5)
+      } else {
+        stop("Neither webshot2 nor webshot is installed.")
+      }
+      TRUE
+    }, error = function(e) {
+      log_warn("Figure S1 PNG export failed: ", conditionMessage(e))
+      FALSE
+    })
+
+    if (isTRUE(.s1_saved) && file.exists(.s1_path)) {
+      # Trim excess whitespace left by the browser viewport
+      if (requireNamespace("magick", quietly = TRUE)) {
+        tryCatch({
+          .img <- magick::image_read(.s1_path)
+          .img <- magick::image_trim(.img)
+          .img <- magick::image_border(.img, "white", "30x30")
+          magick::image_write(.img, .s1_path)
+        }, error = function(e) {
+          log_warn("Figure S1 trim step failed: ", conditionMessage(e))
+        })
+      }
+      sz_kb <- tryCatch(round(file.size(.s1_path) / 1024, 1), error = function(e) NA_real_)
+      log_line("Figure saved : figures/supplementary/figure_s1_participant_flow.png")
+      log_line("             : n=", .n_s1,
+               " | ", ctl_label, "-first n=", .n_ctl_s1,
+               " | ", int_label, "-first n=", .n_int_s1,
+               " | ", sz_kb, " KB")
+    }
+  }
+
+} else {
+  log_warn("Figure S1 skipped: DiagrammeR and/or htmlwidgets not installed.")
+  log_warn("         Install via: install.packages(c('DiagrammeR', 'htmlwidgets'))")
+}
+
 log_h2("FIGURES COMPLETE")

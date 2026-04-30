@@ -885,10 +885,18 @@ cat("\nBuilding comparison tables...\n")
 
 # ---------------------------------------------------------------------------
 # 8a. Overall results — both contrasts, all exclusion variants
-#     Primary sensitivity table: mirrors structure of 00_overall_results.csv.
-#     Rows: AI vs Control (restricted) + Period 2 vs Period 1 (restricted),
-#     one row per exclusion variant, sorted by Effect then Exclusion Variant.
+#     Primary sensitivity table: same column style as 00_overall_results.csv.
+#     Columns: Contrast | Exclusion Variant | Group A | Mean A (SD) | Group B |
+#              Mean B (SD) | Mean Diff (A − B) | 95% CI | Cohen dz | paired p |
+#              MM Est (SE) | MM p
 # ---------------------------------------------------------------------------
+# Load study config for group label names (int_label / ctl_label).
+.study_cfg_8a_path <- file.path(proj_root, "config", "study_config.yml")
+.study_yml_8a      <- if (file.exists(.study_cfg_8a_path))
+  tryCatch(yaml::read_yaml(.study_cfg_8a_path), error = function(e) list()) else list()
+.int_label_8a <- (.study_yml_8a[["study"]][["intervention_label"]]) %||% "Intervention"
+.ctl_label_8a <- (.study_yml_8a[["study"]][["control_label"]])       %||% "Control"
+
 .rows_8a <- lapply(runs, function(r) {
   run_name  <- r[["name"]]
   run_label <- r[["label"]] %||% run_name
@@ -941,34 +949,36 @@ cat("\nBuilding comparison tables...\n")
   if (nrow(int_row) > 0) {
     pr <- int_row[1L, ]
     rows[[1L]] <- data.frame(
-      "Effect"            = "AI vs. Control",
-      "Exclusion Variant" = run_label,
-      "N"                 = pr[["N"]],
-      "Mean A (SD)"       = pr[["Mean A (SD)"]],
-      "Mean B (SD)"       = pr[["Mean B (SD)"]],
-      "Mean Diff"         = pr[["Mean Diff"]],
-      "95% CI"            = pr[["95% CI"]],
-      "Cohen dz"          = pr[["Cohen dz"]],
-      "p"                 = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
-      "MM Est (SE)"       = cond_est,
-      "MM p"              = cond_p,
+      "Contrast"               = paste0(.int_label_8a, " vs. ", .ctl_label_8a),
+      "Exclusion Variant"      = run_label,
+      "Group A"                = .int_label_8a,
+      "Mean A (SD)"            = pr[["Mean A (SD)"]],
+      "Group B"                = .ctl_label_8a,
+      "Mean B (SD)"            = pr[["Mean B (SD)"]],
+      "Mean Diff (A \u2212 B)" = pr[["Mean Diff"]],
+      "95% CI"                 = pr[["95% CI"]],
+      "Cohen dz"               = pr[["Cohen dz"]],
+      "paired p"               = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
+      "MM Est (SE)"            = cond_est,
+      "MM p"                   = cond_p,
       stringsAsFactors = FALSE, check.names = FALSE
     )
   }
   if (nrow(per_row) > 0) {
     pr <- per_row[1L, ]
     rows[[2L]] <- data.frame(
-      "Effect"            = "Period 2 vs. Period 1",
-      "Exclusion Variant" = run_label,
-      "N"                 = pr[["N"]],
-      "Mean A (SD)"       = pr[["Mean A (SD)"]],
-      "Mean B (SD)"       = pr[["Mean B (SD)"]],
-      "Mean Diff"         = pr[["Mean Diff"]],
-      "95% CI"            = pr[["95% CI"]],
-      "Cohen dz"          = pr[["Cohen dz"]],
-      "p"                 = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
-      "MM Est (SE)"       = per_est,
-      "MM p"              = per_p,
+      "Contrast"               = "Period 2 vs. Period 1",
+      "Exclusion Variant"      = run_label,
+      "Group A"                = "Period 2",
+      "Mean A (SD)"            = pr[["Mean A (SD)"]],
+      "Group B"                = "Period 1",
+      "Mean B (SD)"            = pr[["Mean B (SD)"]],
+      "Mean Diff (A \u2212 B)" = pr[["Mean Diff"]],
+      "95% CI"                 = pr[["95% CI"]],
+      "Cohen dz"               = pr[["Cohen dz"]],
+      "paired p"               = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
+      "MM Est (SE)"            = per_est,
+      "MM p"                   = per_p,
       stringsAsFactors = FALSE, check.names = FALSE
     )
   }
@@ -978,11 +988,13 @@ cat("\nBuilding comparison tables...\n")
 .rows_8a <- Filter(Negate(is.null), .rows_8a)
 if (length(.rows_8a) > 0) {
   .df_8a <- do.call(rbind, .rows_8a)
-  # Sort: AI vs Control first, then Period 2 vs Period 1; within each, by variant
-  .df_8a <- .df_8a[order(.df_8a[["Effect"]], .df_8a[["Exclusion Variant"]]), ]
+  # Sort: condition contrast first, then period; within each, by variant
+  .df_8a <- .df_8a[order(.df_8a[["Contrast"]], .df_8a[["Exclusion Variant"]]), ]
   .notes_8a <- Filter(Negate(is.null), c(
-    "Sensitivity check: both primary contrasts (AI vs. Control and Period 2 vs. Period 1) under restricted scoring, compared across exclusion variants.",
-    "Mean A (SD) and Mean B (SD): A = first-named group in Effect column (AI; Period 2). B = second-named group (Control; Period 1). Mean Diff = A minus B (paired).",
+    "Sensitivity check: both primary contrasts under restricted scoring, compared across exclusion variants.",
+    paste0("Group A = first-named group in Contrast (", .int_label_8a, "; Period 2). ",
+           "Group B = second-named group (", .ctl_label_8a, "; Period 1). ",
+           "Mean Diff (A \u2212 B) = A minus B (paired)."),
     "MM Est (SE) = linear mixed-model fixed-effect estimate (SE) for each contrast.",
     "Table structure mirrors 00_overall_results.csv in each run's primary/ folder.",
     .EXCL_NOTE,
@@ -991,18 +1003,21 @@ if (length(.rows_8a) > 0) {
   .sidecar_8a <- c(
     "# Variant Comparison: Overall Results (Sensitivity Table)",
     "",
-    "**Display title:** Sensitivity Analysis \u2014 Overall Results by Exclusion Variant (Restricted Scoring)",
+    paste0("**Display title:** Sensitivity Analysis \u2014 Overall Results by Exclusion Variant (Restricted Scoring)"),
     "",
     "**Suggested manuscript title:** Primary and Period Effects by Exclusion Variant: Sensitivity Analysis (Restricted Scoring)",
     "",
-    "**Suggested caption:** Sensitivity analysis: AI vs.\u00a0Control and Period\u00a02 vs.\u00a0Period\u00a01 contrasts",
+    paste0("**Suggested caption:** Sensitivity analysis: ", .int_label_8a, " vs.\u00a0", .ctl_label_8a,
+           " and Period\u00a02 vs.\u00a0Period\u00a01 contrasts"),
     "across two item-exclusion variants (restricted scoring).",
-    "Mean A = first-named group in Effect column (AI; Period\u00a02). Mean B = second-named group (Control; Period\u00a01).",
-    "Mean Diff = A minus B (paired). MM\u00a0Est (SE) = linear mixed-model fixed-effect estimate (SE).",
+    paste0("Group A = first-named group in Contrast (", .int_label_8a, "; Period\u00a02). ",
+           "Group B = second-named group (", .ctl_label_8a, "; Period\u00a01)."),
+    "Mean Diff (A \u2212 B) = A minus B (paired). MM\u00a0Est (SE) = linear mixed-model fixed-effect estimate (SE).",
     "",
     "## What it shows",
     "",
-    "Both primary contrasts (AI vs.\u00a0Control and Period\u00a02 vs.\u00a0Period\u00a01) under restricted",
+    paste0("Both primary contrasts (", .int_label_8a, " vs.\u00a0", .ctl_label_8a,
+           " and Period\u00a02 vs.\u00a0Period\u00a01) under restricted"),
     "scoring, side by side for each exclusion variant. Allows a direct sensitivity check:",
     "do the overall results change when Y6 is additionally excluded?",
     "",
@@ -1540,6 +1555,66 @@ if (length(.rows_8g) > 0) {
 }
 
 cat("\nComparison tables written to: ", .comp_tbl_dir, "\n\n", sep = "")
+
+# ---------------------------------------------------------------------------
+# 9. Copy core manuscript tables from the primary run into the comparison package
+# ---------------------------------------------------------------------------
+# The comparison output folder is the manuscript assembly point.  The canonical
+# per-study tables (00_overall_results, 00_study_design) are generated by the
+# main pipeline and live in per-run folders.  This section copies them into a
+# clearly labelled subfolder so the comparison package is self-contained.
+#
+# Source run:  comp$primary_run (set in comparison config); falls back to the
+#              first run in the list if the key is absent.
+#
+# Destination: tables/core_from_main_run/   (CSV)
+#              tables_png/core_from_main_run/ (PNG)
+{
+  .primary_run_name <- comp[["primary_run"]] %||% runs[[1]][["name"]]
+  .primary_run_dir  <- file.path(outputs_dir, .primary_run_name)
+
+  .core_csv_dst <- file.path(outputs_dir, out_name, "tables",     "core_from_main_run")
+  .core_png_dst <- file.path(outputs_dir, out_name, "tables_png", "core_from_main_run")
+  dir.create(.core_csv_dst, recursive = TRUE, showWarnings = FALSE)
+  dir.create(.core_png_dst, recursive = TRUE, showWarnings = FALSE)
+
+  # Each entry: list(tbl_sub, png_sub, name)
+  #   tbl_sub / png_sub = subfolder inside the per-run tables / tables_png dir
+  .core_files <- list(
+    list(tbl_sub = "primary",     png_sub = "primary",     name = "00_overall_results"),
+    list(tbl_sub = "descriptive", png_sub = "descriptive", name = "00_study_design")
+  )
+
+  cat("Copying core tables from primary run '", .primary_run_name, "'...\n", sep = "")
+
+  for (.cf in .core_files) {
+    .csv_src <- file.path(.primary_run_dir, "tables",     .cf$tbl_sub, paste0(.cf$name, ".csv"))
+    .png_src <- file.path(.primary_run_dir, "tables_png", .cf$png_sub, paste0(.cf$name, ".png"))
+    .csv_dst <- file.path(.core_csv_dst, paste0(.cf$name, ".csv"))
+    .png_dst <- file.path(.core_png_dst, paste0(.cf$name, ".png"))
+
+    if (file.exists(.csv_src)) {
+      file.copy(.csv_src, .csv_dst, overwrite = TRUE)
+      cat(sprintf("  [CSV] core_from_main_run/%s.csv  <-  %s/tables/%s/%s.csv\n",
+                  .cf$name, .primary_run_name, .cf$tbl_sub, .cf$name))
+    } else {
+      cat(sprintf("  [MISSING] %s not found in primary run '%s' -- skipped\n",
+                  paste0(.cf$name, ".csv"), .primary_run_name))
+    }
+
+    if (file.exists(.png_src)) {
+      file.copy(.png_src, .png_dst, overwrite = TRUE)
+      cat(sprintf("  [PNG] core_from_main_run/%s.png  <-  %s/tables_png/%s/%s.png\n",
+                  .cf$name, .primary_run_name, .cf$png_sub, .cf$name))
+    } else {
+      cat(sprintf("  [MISSING] %s not found in primary run '%s' -- skipped\n",
+                  paste0(.cf$name, ".png"), .primary_run_name))
+    }
+  }
+
+  cat("Core tables destination : ", .core_csv_dst, "\n", sep = "")
+  cat("\n")
+}
 
 # --- Output audit for the comparison directory ---
 {

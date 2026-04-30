@@ -164,173 +164,85 @@ if (!is.null(.t00_mm)) {
   }
 }
 
-# Two-panel design: Panel A = int_label vs. ctl_label, Panel B = Period 2 vs. Period 1.
-# CSV uses a Panel column + generic Mean A/B labels (notes map A/B per panel).
-# PNG overrides the save_table() output: two separate gt tables stacked via magick,
-# each with its own correctly labelled column headers (all labels config-driven).
-.tbl0_csv_rows <- list()
-.gt_a_df       <- NULL
-.gt_b_df       <- NULL
+# Single rectangular table: one row per contrast (condition + period).
+# Columns: Contrast | Group A | Mean A (SD) | Group B | Mean B (SD) |
+#          Mean Diff (A − B) | 95% CI | Cohen dz | paired p | MM Est (SE) | MM p
+# Condition labels (Group A / Group B) are config-driven via int_label / ctl_label.
+# Period labels are fixed structural terminology.
+.tbl0_caption <- paste0(
+  "Primary outcomes from the restricted primary analysis (", .restr_label, "). ",
+  "Mean Diff = Group A \u2212 Group B using paired within-participant comparisons. ",
+  "MM Est (SE) = linear mixed-model fixed-effect estimate (SE), with sequence included ",
+  "as a covariate and participant as a random intercept."
+)
+
+.tbl0_rows <- list()
 
 if (!is.null(.t00_con)) {
-  .tbl0_csv_rows[[1]] <- tibble::tibble(
-    `Panel`       = paste0(int_label, " vs. ", ctl_label),
-    `Scoring`     = .restr_label,
-    `N`           = .t00_con$n,
-    `Mean A (SD)` = paste0(round(.t00_con$mean_a, 2), " (", round(.t00_con$sd_a, 2), ")"),
-    `Mean B (SD)` = paste0(round(.t00_con$mean_b, 2), " (", round(.t00_con$sd_b, 2), ")"),
-    `Mean Diff`   = round(.t00_con$mean_diff, 3),
-    `95% CI`      = fmt_ci(.t00_con$ci_lo, .t00_con$ci_hi),
-    `Cohen dz`    = round(.t00_con$dz, 3),
-    `p`           = if (!is.na(.t00_con$p)) sub("^= ", "", fmt_p(.t00_con$p)) else "NA",
-    `MM Est (SE)` = .t00_mm_cond_est,
-    `MM p`        = .t00_mm_cond_p
-  )
-  .gt_a_df <- tibble::tibble(
-    Scoring                                = .restr_label,
-    N                                      = .t00_con$n,
-    !!paste0(int_label, " Mean (SD)") :=   paste0(round(.t00_con$mean_a, 2), " (", round(.t00_con$sd_a, 2), ")"),
-    !!paste0(ctl_label, " Mean (SD)") :=   paste0(round(.t00_con$mean_b, 2), " (", round(.t00_con$sd_b, 2), ")"),
-    `Mean Diff`          = round(.t00_con$mean_diff, 3),
-    `95% CI`             = fmt_ci(.t00_con$ci_lo, .t00_con$ci_hi),
-    `Cohen dz`           = round(.t00_con$dz, 3),
-    p                    = if (!is.na(.t00_con$p)) sub("^= ", "", fmt_p(.t00_con$p)) else "NA",
-    `MM Est (SE)`        = .t00_mm_cond_est,
-    `MM p`               = .t00_mm_cond_p
+  .tbl0_rows[[1]] <- tibble::tibble(
+    `Contrast`               = paste0(int_label, " vs. ", ctl_label),
+    `Group A`                = int_label,
+    `Mean A (SD)`            = paste0(round(.t00_con$mean_a, 2), " (", round(.t00_con$sd_a, 2), ")"),
+    `Group B`                = ctl_label,
+    `Mean B (SD)`            = paste0(round(.t00_con$mean_b, 2), " (", round(.t00_con$sd_b, 2), ")"),
+    !!paste0("Mean Diff (A \u2212 B)") := round(.t00_con$mean_diff, 3),
+    `95% CI`                 = fmt_ci(.t00_con$ci_lo, .t00_con$ci_hi),
+    `Cohen dz`               = round(.t00_con$dz, 3),
+    `paired p`               = if (!is.na(.t00_con$p)) sub("^= ", "", fmt_p(.t00_con$p)) else "NA",
+    `MM Est (SE)`            = .t00_mm_cond_est,
+    `MM p`                   = .t00_mm_cond_p
   )
 }
+
 if (!is.null(.t00_per)) {
-  .tbl0_csv_rows[[2]] <- tibble::tibble(
-    `Panel`       = "Period 2 vs. Period 1",
-    `Scoring`     = .restr_label,
-    `N`           = .t00_per$n,
-    `Mean A (SD)` = paste0(round(.t00_per$mean_a, 2), " (", round(.t00_per$sd_a, 2), ")"),
-    `Mean B (SD)` = paste0(round(.t00_per$mean_b, 2), " (", round(.t00_per$sd_b, 2), ")"),
-    `Mean Diff`   = round(.t00_per$mean_diff, 3),
-    `95% CI`      = fmt_ci(.t00_per$ci_lo, .t00_per$ci_hi),
-    `Cohen dz`    = round(.t00_per$dz, 3),
-    `p`           = if (!is.na(.t00_per$p)) sub("^= ", "", fmt_p(.t00_per$p)) else "NA",
-    `MM Est (SE)` = .t00_mm_per_est,
-    `MM p`        = .t00_mm_per_p
-  )
-  .gt_b_df <- tibble::tibble(
-    Scoring                = .restr_label,
-    N                      = .t00_per$n,
-    `Period 2 Mean (SD)`   = paste0(round(.t00_per$mean_a, 2), " (", round(.t00_per$sd_a, 2), ")"),
-    `Period 1 Mean (SD)`   = paste0(round(.t00_per$mean_b, 2), " (", round(.t00_per$sd_b, 2), ")"),
-    `Mean Diff`            = round(.t00_per$mean_diff, 3),
-    `95% CI`               = fmt_ci(.t00_per$ci_lo, .t00_per$ci_hi),
-    `Cohen dz`             = round(.t00_per$dz, 3),
-    p                      = if (!is.na(.t00_per$p)) sub("^= ", "", fmt_p(.t00_per$p)) else "NA",
-    `MM Est (SE)`          = .t00_mm_per_est,
-    `MM p`                 = .t00_mm_per_p
+  .tbl0_rows[[2]] <- tibble::tibble(
+    `Contrast`               = "Period 2 vs. Period 1",
+    `Group A`                = "Period 2",
+    `Mean A (SD)`            = paste0(round(.t00_per$mean_a, 2), " (", round(.t00_per$sd_a, 2), ")"),
+    `Group B`                = "Period 1",
+    `Mean B (SD)`            = paste0(round(.t00_per$mean_b, 2), " (", round(.t00_per$sd_b, 2), ")"),
+    !!paste0("Mean Diff (A \u2212 B)") := round(.t00_per$mean_diff, 3),
+    `95% CI`                 = fmt_ci(.t00_per$ci_lo, .t00_per$ci_hi),
+    `Cohen dz`               = round(.t00_per$dz, 3),
+    `paired p`               = if (!is.na(.t00_per$p)) sub("^= ", "", fmt_p(.t00_per$p)) else "NA",
+    `MM Est (SE)`            = .t00_mm_per_est,
+    `MM p`                   = .t00_mm_per_p
   )
 }
 
-tbl0 <- dplyr::bind_rows(.tbl0_csv_rows[!sapply(.tbl0_csv_rows, is.null)])
-
-.tbl0_caption <- paste0(
-  "Primary outcomes, within-subject crossover study (", .restr_label, "). ",
-  "Panel A (", int_label, " vs. ", ctl_label, "): ",
-  int_label, " Mean (SD) and ", ctl_label, " Mean (SD). ",
-  "Panel B (Period 2 vs. Period 1): Period 2 Mean (SD) and Period 1 Mean (SD). ",
-  "Mean Diff = A \u2212 B (paired). dz = Cohen\u2019s dz. ",
-  "MM Est (SE) = linear mixed-model fixed-effect estimate (SE); ",
-  "sequence as covariate, random intercept for participant."
-)
+tbl0 <- dplyr::bind_rows(.tbl0_rows[!sapply(.tbl0_rows, is.null)])
 
 if (!is.null(tbl0) && nrow(tbl0) > 0) {
 
-  # --- CSV (Panel column + generic Mean A/B; notes map A/B per panel) ---
   save_table(
     tbl0, "00_overall_results", subfolder = "primary",
-    caption = .tbl0_caption,
-    notes = c(
-      paste0("Panel \u2018", int_label, " vs. ", ctl_label,
-             "\u2019: Mean A (SD) = ", int_label, " mean; Mean B (SD) = ", ctl_label, " mean."),
-      "Panel \u2018Period 2 vs. Period 1\u2019: Mean A (SD) = Period 2 mean; Mean B (SD) = Period 1 mean.",
-      "Mean Diff = A \u2212 B (paired). dz = Cohen\u2019s dz.",
-      "MM Est (SE) = linear mixed-model fixed-effect estimate (SE); sequence as covariate, random intercept for participant."
-    )
+    caption = .tbl0_caption
   )
 
-  # --- PNG: two-panel override via magick ---
-  # save_table() above writes a basic single-panel PNG; we overwrite it below.
-  if (requireNamespace("gt",     quietly = TRUE) &&
-      requireNamespace("magick", quietly = TRUE) &&
-      !isFALSE(cfg$tables$export_png)) {
-
-    .tbl0_gt_style <- function(.gt) {
-      .gt |>
-        gt::tab_options(
-          table.font.size                   = 11,
-          column_labels.font.weight         = "bold",
-          table.border.top.color            = "grey30",
-          table.border.bottom.color         = "grey30",
-          column_labels.border.bottom.color = "grey50",
-          data_row.padding                  = gt::px(4)
-        ) |>
-        gt::opt_table_lines("none") |>
-        gt::opt_row_striping()
-    }
-
-    .tmp_a    <- tempfile(fileext = ".png")
-    .tmp_b    <- tempfile(fileext = ".png")
-    .ok_a     <- FALSE
-    .ok_b     <- FALSE
-
-    if (!is.null(.gt_a_df)) {
-      tryCatch({
-        gt::gtsave(
-          gt::gt(.gt_a_df) |>
-            gt::tab_header(title = gt::md(paste0(
-              "**Panel A \u2014 ", int_label, " vs. ", ctl_label, "**"))) |>
-            .tbl0_gt_style(),
-          .tmp_a)
-        .ok_a <- TRUE
-      }, error = function(e)
-        log_warn("00_overall_results Panel A PNG failed: ", conditionMessage(e)))
-    }
-
-    if (!is.null(.gt_b_df)) {
-      tryCatch({
-        gt::gtsave(
-          gt::gt(.gt_b_df) |>
-            gt::tab_header(title = gt::md(
-              "**Panel B \u2014 Period 2 vs. Period 1**")) |>
-            .tbl0_gt_style() |>
-            gt::tab_source_note(gt::md(.tbl0_caption)),
-          .tmp_b)
-        .ok_b <- TRUE
-      }, error = function(e)
-        log_warn("00_overall_results Panel B PNG failed: ", conditionMessage(e)))
-    }
-
-    if (.ok_a && .ok_b) {
-      .img_a <- tryCatch(magick::image_read(.tmp_a), error = function(e) NULL)
-      .img_b <- tryCatch(magick::image_read(.tmp_b), error = function(e) NULL)
-      if (!is.null(.img_a) && !is.null(.img_b)) {
-        .wa <- magick::image_info(.img_a)$width
-        .wb <- magick::image_info(.img_b)$width
-        if (.wa != .wb) {
-          .mw <- max(.wa, .wb)
-          if (.wa < .mw)
-            .img_a <- magick::image_extent(.img_a,
-              paste0(.mw, "x", magick::image_info(.img_a)$height),
-              gravity = "West", color = "white")
-          if (.wb < .mw)
-            .img_b <- magick::image_extent(.img_b,
-              paste0(.mw, "x", magick::image_info(.img_b)$height),
-              gravity = "West", color = "white")
-        }
-        .combined <- magick::image_append(c(.img_a, .img_b), stack = TRUE)
-        .png00    <- out_path("tables_png", "primary", "00_overall_results.png")
-        magick::image_write(.combined, path = .png00)
-        log_line("Table PNG   : tables_png/primary/00_overall_results.png [two-panel]")
-      }
-    }
-    try(file.remove(.tmp_a), silent = TRUE)
-    try(file.remove(.tmp_b), silent = TRUE)
+  # PNG: single gt table with manuscript title (overrides save_table() PNG).
+  if (requireNamespace("gt", quietly = TRUE) && !isFALSE(cfg$tables$export_png)) {
+    tryCatch({
+      gt::gtsave(
+        gt::gt(tbl0) |>
+          gt::tab_header(
+            title    = gt::md("**Table 1. Primary outcomes from the randomized crossover pilot study**"),
+            subtitle = gt::md(paste0("*", .tbl0_caption, "*"))
+          ) |>
+          gt::tab_options(
+            table.font.size                   = 11,
+            column_labels.font.weight         = "bold",
+            table.border.top.color            = "grey30",
+            table.border.bottom.color         = "grey30",
+            column_labels.border.bottom.color = "grey50",
+            data_row.padding                  = gt::px(4)
+          ) |>
+          gt::opt_table_lines("none") |>
+          gt::opt_row_striping(),
+        out_path("tables_png", "primary", "00_overall_results.png")
+      )
+      log_line("Table PNG   : tables_png/primary/00_overall_results.png")
+    }, error = function(e)
+      log_warn("00_overall_results PNG failed: ", conditionMessage(e)))
   }
 
 } else {

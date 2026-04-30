@@ -499,15 +499,27 @@ call set "_SEL_!_SEL_COUNT!_NAME=%%_OUT_!_PKS!%%"
 call set "_M9I_DEF=%%_OUT_!_PKS!%%"
 set /p "_LBL=  Label [!_M9I_DEF!]: "
 if "!_LBL!"=="" set "_LBL=!_M9I_DEF!"
+:: Sanitize & in labels (& is a CMD separator and causes parse errors when expanded)
+set "_LBL=!_LBL: & = and !"
+set "_LBL=!_LBL:&= and !"
 set "_SEL_!_SEL_COUNT!_LABEL=!_LBL!"
 goto :_M9I_PICK
 
 :_M9I_PICK_DONE
+echo  DEBUG: _M9I_PICK_DONE reached, _SEL_COUNT=!_SEL_COUNT!
 :: Output folder name
 echo.
 set "_CMP_DEFAULT_OUT=comparison_custom"
 set /p "_CMP_OUTNAME=  Output folder name [!_CMP_DEFAULT_OUT!]: "
 if "!_CMP_OUTNAME!"=="" set "_CMP_OUTNAME=!_CMP_DEFAULT_OUT!"
+:: Sanitize shell-unsafe characters from folder name
+set "_CMP_OUTNAME=!_CMP_OUTNAME:&=-and-!"
+set "_CMP_OUTNAME=!_CMP_OUTNAME:(=!"
+set "_CMP_OUTNAME=!_CMP_OUTNAME:)=!"
+set "_CMP_OUTNAME=!_CMP_OUTNAME:<=!"
+set "_CMP_OUTNAME=!_CMP_OUTNAME:>=!"
+set "_CMP_OUTNAME=!_CMP_OUTNAME:|=!"
+echo  DEBUG: _CMP_OUTNAME after sanitize = [!_CMP_OUTNAME!]
 
 :: Figure groups
 echo.
@@ -530,14 +542,23 @@ if /i "!_SAVE_YML!"=="n" goto :_M9I_TEMP_YAML
 set "_YAML_DEFAULT=!_CMP_OUTNAME!"
 set /p "_YAML_FNAME=  Filename without .yml [!_YAML_DEFAULT!]: "
 if "!_YAML_FNAME!"=="" set "_YAML_FNAME=!_YAML_DEFAULT!"
+:: Sanitize shell-unsafe characters from config filename
+set "_YAML_FNAME=!_YAML_FNAME:&=-and-!"
+set "_YAML_FNAME=!_YAML_FNAME:(=!"
+set "_YAML_FNAME=!_YAML_FNAME:)=!"
+set "_YAML_FNAME=!_YAML_FNAME:<=!"
+set "_YAML_FNAME=!_YAML_FNAME:>=!"
+set "_YAML_FNAME=!_YAML_FNAME:|=!"
 set "_YAML_PATH=%PIPELINE_ROOT%\config\!_YAML_FNAME!.yml"
 set "_DELETE_YAML=0"
+echo  DEBUG: _YAML_FNAME=[!_YAML_FNAME!] _YAML_PATH=[!_YAML_PATH!]
 goto :_M9I_WRITE_YAML
 :_M9I_TEMP_YAML
 set "_YAML_PATH=%PIPELINE_ROOT%\config\_comparison_temp.yml"
 set "_DELETE_YAML=1"
 
 :_M9I_WRITE_YAML
+echo  DEBUG: _M9I_WRITE_YAML starting, writing to [!_YAML_PATH!]
 (
 echo comparison:
 echo   runs:
@@ -559,7 +580,7 @@ echo   layout:       "side_by_side"
 echo   output_name:  "!_CMP_OUTNAME!"
 echo   common_scale: false
 echo   dpi:          300
-echo   label_font_size: 28
+echo   label_font_size: 36
 ) >> "!_YAML_PATH!"
 
 if /i "!_FG!"=="A" goto :_M9I_FG_ALL
@@ -585,14 +606,14 @@ set "_CGRPS_SPC=!_CGRPS:,= !"
 for %%G in (!_CGRPS_SPC!) do echo     - "%%G"  >> "!_YAML_PATH!"
 
 :_M9I_FG_DONE
+echo  DEBUG: _M9I_FG_DONE reached
 set "COMP_CONFIG=!_YAML_PATH!"
-if "!_DELETE_YAML!"=="1" (
-    echo.
-    echo  [Config written (temporary): !_YAML_PATH!]
-) else (
-    echo.
-    echo  [Config saved: !_YAML_PATH!]
-)
+echo  DEBUG: before config-saved echo, _DELETE_YAML=[!_DELETE_YAML!]
+echo.
+if "!_DELETE_YAML!"=="1" echo  [Config written (temporary): !_YAML_PATH!]
+if "!_DELETE_YAML!"=="0" echo  [Config saved: !_YAML_PATH!]
+echo  DEBUG: after config-saved echo
+echo  DEBUG: about to goto _COMP_RUN_M9
 goto :_COMP_RUN_M9
 
 :: ---------------------------------------------------------------------------
@@ -637,6 +658,7 @@ set "COMP_CONFIG=!COMP_CONFIG:"=!"
 :: _COMP_RUN_M9 — validate and execute
 :: ---------------------------------------------------------------------------
 :_COMP_RUN_M9
+echo  DEBUG: entering _COMP_RUN_M9
 if "!COMP_CONFIG!"=="" (
     echo  No config specified.
     pause
@@ -655,10 +677,11 @@ pushd "!PIPELINE_ROOT!"
 "!RSCRIPT!" --vanilla "%PIPELINE_ROOT%\R\run_comparison.R"
 set "_CE9=!ERRORLEVEL!"
 popd
+echo  DEBUG: Rscript exit code = !_CE9!
 if "!_DELETE_YAML!"=="1" del "!COMP_CONFIG!" 2>nul
 if "!_CE9!"=="0" (
     echo.
-    echo  [OK] Comparison complete.
+    echo  Comparison complete.
     if not "!_CMP_OUTNAME!"=="" (
         echo  Outputs written to: %PIPELINE_ROOT%\outputs\!_CMP_OUTNAME!\
     ) else (
@@ -673,7 +696,11 @@ if "!_CE9!"=="0" (
     echo.
 )
 echo.
-set /p "_M9WAIT=  Press Enter to return to the main menu. "
+:_M9_POSTRUN_WAIT
+set "_M9CHOICE="
+set /p "_M9CHOICE=  Press Enter to return to the main menu. "
+if not "!_M9CHOICE!"=="" goto :_M9_POSTRUN_WAIT
+echo  DEBUG: returning to MAIN_MENU from interactive comparison
 goto :MAIN_MENU
 
 :: =============================================================================
@@ -1083,8 +1110,10 @@ set /a "_AC_I=1"
 if !_AC_I! GTR !EXCL_COUNT! goto :_AC_LOOP_END
 call set "_AC_N=%%VARIANT_NAME_!_AC_I!%%"
 call set "_AC_E=%%EXCL_SET_!_AC_I!%%"
-set "_AC_L=!_AC_E:,=+!"
-if /i "!_AC_E!"=="NONE" set "_AC_L=Full scoring"
+set "_AC_L=Restricted scoring: !_AC_E!"
+if /i "!_AC_E!"=="NONE"   set "_AC_L=Full scoring"
+if /i "!_AC_E!"=="y1"     set "_AC_L=Restricted scoring: Y1 excluded"
+if /i "!_AC_E!"=="y1,y6"  set "_AC_L=Restricted scoring: Y1 and Y6 excluded"
 (
 echo     - name:  "!_AC_N!"
 echo       label: "!_AC_L!"
@@ -1097,7 +1126,7 @@ echo   layout:       "side_by_side"
 echo   output_name:  "!_AC_OUT!"
 echo   common_scale: false
 echo   dpi:          300
-echo   label_font_size: 28
+echo   label_font_size: 36
 echo   figure_groups:
 echo     - "primary"
 echo     - "mixed_models"

@@ -195,8 +195,9 @@ optional_analyses:
 # -----------------------------------------------------------------------------
 psychometrics:
   # Number of ability strata (quantile groups) for stratified item analysis.
-  # 4 = quartile analysis (Q1 lowest, Q4 highest).  Minimum 2, maximum 10.
-  ability_strata: 4
+  # 3 = tertile analysis (T1 lowest, T3 highest).  Minimum 2, maximum 10.
+  # 3 is recommended for N < 30 to keep bins stable.
+  ability_strata: 3
 
   # Suspicious item detection thresholds.
   # top_miss_threshold: flag an item if the TOP ability stratum misses it at

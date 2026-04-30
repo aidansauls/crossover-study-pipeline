@@ -358,8 +358,8 @@ fmt_num  <- function(x, d = 2)   round(x, d)
 fmt_pct  <- function(x, d = 1)   paste0(round(x * 100, d), "%")
 fmt_p    <- function(p) {
   if (is.na(p)) return("NA")
-  if (p < 0.001) return("< .001")
-  if (p < 0.01)  return(sprintf("= .%03.0f", p * 1000))
+  if (p < 0.001) return("< 0.001")
+  if (p < 0.01)  return(sprintf("= 0.%03.0f", p * 1000))
   sprintf("= %.3f", p)
 }
 fmt_ci   <- function(lo, hi, d = 2) {

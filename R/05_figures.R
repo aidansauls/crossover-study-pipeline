@@ -636,12 +636,7 @@ fig14 <- ggplot2::ggplot(dat_diff14, ggplot2::aes(x = .data$delta)) +
                       colour = "grey40",    linewidth = 0.6) +
   ggplot2::geom_vline(xintercept = mean_d14, linetype = "solid",
                       colour = col_ctl,     linewidth = 0.9) +
-  ggplot2::annotate("text",
-    x = Inf, y = Inf,
-    label = paste0("N = ", n_diff14),
-    hjust = 1.15, vjust = 1.6,
-    size = 3.5, colour = "grey35"
-  ) +
+  ggplot2::labs(caption = paste0("N\u202f=\u202f", n_diff14)) +
   ggplot2::scale_x_continuous(
     name = paste0(int_label, " \u2212 ", ctl_label, " (score difference)")
   ) +
@@ -1051,7 +1046,7 @@ if ("subgroup4" %in% names(dat)) {
 
   n_sg <- length(unique(dat$subgroup4))
   save_figure(fig22, "subgroup4_intervention_spaghetti",
-              subfolder = "primary",
+              subfolder = "supplementary",
               width = 9,
               height = max(5, ceiling(n_sg / 2) * 3.5))
 }
@@ -1155,7 +1150,7 @@ if ("subgroup4" %in% names(dat)) {
     )
 
   save_figure(fig24, "subgroup4_delta_dotplot",
-              subfolder = "primary",
+              subfolder = "supplementary",
               width = 7.5,
               height = max(4.5, nrow(dat_delta_sg4) * 0.30))
 }
@@ -1292,34 +1287,145 @@ if (!is.null(psych) &&
 if (!is.null(.raw_data_27)) {
   log_h2("Figure 27: Inter-item correlation heatmap")
 
-  .corr_heatmap <- function(items_df, item_cols, excl_cols, axis_lbl) {
+  .corr_heatmap <- function(items_df, item_cols, excl_cols, axis_lbl,
+                             excl_always = NULL) {
+    # item_cols   : ALL item columns for the form (including scoring-excluded ones).
+    # excl_cols   : items excluded from restricted scoring in this run.
+    # excl_always : (optional) subset of excl_cols excluded in ALL comparison
+    #               variants. When provided, these items are marked "**" in axis
+    #               labels and cell annotations; remaining excl_cols items get "*".
+    #               When NULL (default / single-run mode), all excl_cols get "*".
+
     mat <- as.matrix(dplyr::select(items_df, dplyr::all_of(item_cols)))
     storage.mode(mat) <- "numeric"
-    cmat <- suppressWarnings(cor(mat, use = "pairwise.complete.obs"))
 
-    # Sort items numerically
-    ord  <- order(suppressWarnings(as.numeric(gsub("[^0-9]", "", item_cols))))
-    cmat <- cmat[ord, ord]
-    rn   <- rownames(cmat)
+    # Detect constant (zero-variance) items: Pearson r is undefined for these.
+    item_var  <- apply(mat, 2, var,  na.rm = TRUE)
+    item_mean <- apply(mat, 2, mean, na.rm = TRUE)
+    zv_cols   <- names(item_var)[!is.na(item_var) & item_var == 0]
+    na_v_cols <- names(item_var)[ is.na(item_var)]
+    const_cols <- union(zv_cols, na_v_cols)
 
-    lbl_fn <- function(x) paste0(toupper(x), ifelse(x %in% excl_cols, "*", ""))
-    lbl_rn <- lbl_fn(rn)
+    # Resolve two-level exclusion sets.
+    # excl_always_eff : items marked ** (excluded in all comparison variants).
+    # excl_strict_eff : items marked *  (excluded only in the stricter variant).
+    excl_always_eff <- if (!is.null(excl_always)) excl_always else character(0)
+    excl_strict_eff <- setdiff(excl_cols, excl_always_eff)
+    # Two-level mode is active when both sets are non-empty and excl_always was
+    # explicitly provided; single-run mode uses * for everything.
+    two_level <- !is.null(excl_always) &&
+                 length(excl_always_eff) > 0 &&
+                 length(excl_strict_eff) > 0
 
-    long <- data.frame(
-      row   = rep(rn, each  = length(rn)),
-      col   = rep(rn, times = length(rn)),
-      value = as.vector(cmat),
+    # Sort items numerically for consistent axis ordering.
+    ord          <- order(suppressWarnings(as.numeric(gsub("[^0-9]", "", item_cols))))
+    ordered_cols <- item_cols[ord]
+    n_items      <- length(ordered_cols)
+
+    # Axis labels:
+    #   two-level mode : ** for excl_always_eff, * for excl_strict_eff
+    #   single-run mode: *  for all excl_cols
+    make_lbl <- function(col) {
+      if (!is.null(excl_always) && col %in% excl_always_eff)
+        paste0(toupper(col), "**")
+      else if (col %in% excl_cols)
+        paste0(toupper(col), "*")
+      else
+        toupper(col)
+    }
+    lbl_cols <- vapply(ordered_cols, make_lbl, character(1))
+
+    # Compute correlation matrix for all items.
+    # Constant items produce NA correlations — handled explicitly below.
+    all_mat <- as.matrix(dplyr::select(items_df, dplyr::all_of(ordered_cols)))
+    storage.mode(all_mat) <- "numeric"
+    cmat <- suppressWarnings(cor(all_mat, use = "pairwise.complete.obs"))
+
+    # Build long-format data frame for ggplot.
+    long <- expand.grid(
+      row = ordered_cols, col = ordered_cols,
       stringsAsFactors = FALSE
     ) |>
       dplyr::mutate(
-        row_lbl = factor(lbl_fn(.data$row), levels = lbl_rn),
-        col_lbl = factor(lbl_fn(.data$col), levels = lbl_rn),
-        on_diag = .data$row == .data$col,
-        r_fill  = dplyr::if_else(.data$on_diag, NA_real_, .data$value)
+        value    = as.vector(cmat),
+        on_diag  = .data$row == .data$col,
+        # A cell is "constant" when at least one member item is constant
+        # (off-diagonal only — diagonal is always grey regardless).
+        is_const = !.data$on_diag &
+                     (.data$row %in% const_cols | .data$col %in% const_cols),
+        # Fill: NA makes tile grey (via na.value); numeric drives the colour scale.
+        r_fill   = dplyr::case_when(
+          .data$on_diag  ~ NA_real_,
+          .data$is_const ~ NA_real_,
+          TRUE           ~ .data$value
+        ),
+        # Exclusion suffix appended to numeric cell values.
+        # Strongest marker wins: ** if either item is always-excluded,
+        # else * if either item is strict-only excluded.
+        excl_sfx = dplyr::case_when(
+          .data$on_diag | .data$is_const                                          ~ "",
+          .data$row %in% excl_always_eff | .data$col %in% excl_always_eff        ~ "**",
+          .data$row %in% excl_strict_eff | .data$col %in% excl_strict_eff        ~ "*",
+          TRUE                                                                    ~ ""
+        ),
+        # Cell text: blank on diagonal, "C" for constant pairs,
+        # numeric (with exclusion suffix) otherwise.
+        cell_text = dplyr::case_when(
+          .data$on_diag  ~ "",
+          .data$is_const ~ "C",
+          TRUE           ~ paste0(sprintf("%.2f", .data$value), .data$excl_sfx)
+        ),
+        row_lbl = factor(
+          vapply(.data$row, make_lbl, character(1)),
+          levels = rev(lbl_cols)   # top-to-bottom = first item to last item
+        ),
+        col_lbl = factor(
+          vapply(.data$col, make_lbl, character(1)),
+          levels = lbl_cols        # left-to-right = first item to last item
+        )
       )
 
-    lim <- max(abs(long$value[!long$on_diag]), na.rm = TRUE)
+    # Colour scale limits from estimable (non-diagonal, non-constant) pairs.
+    valid_vals <- long$value[!long$on_diag & !long$is_const]
+    lim <- max(abs(valid_vals), na.rm = TRUE)
+    lim <- if (is.finite(lim) && lim > 0) lim else 0.05
     lim <- max(lim, 0.05)
+
+    # Degenerate: no estimable pairs at all.
+    if (!any(!long$on_diag & !long$is_const)) {
+      msg <- paste0(
+        "No estimable correlations \u2014 all items are constant.\n",
+        "C = Pearson r undefined (constant item).")
+      p <- ggplot2::ggplot() +
+        ggplot2::annotate("text", x = 0.5, y = 0.5, label = msg,
+                          hjust = 0.5, vjust = 0.5, size = 3.5) +
+        ggplot2::theme_void()
+      return(list(plot = p, n_items = n_items))
+    }
+
+    # ---- Build caption / legend key ------------------------------------- #
+    key_lines <- character(0)
+    if (two_level) {
+      key_lines <- c(key_lines,
+        "** excluded in both restricted variants",
+        "*  excluded only in the stricter restricted variant")
+    } else if (length(excl_always_eff) > 0) {
+      # All excluded items are in excl_always (** markers); excl_strict is empty.
+      key_lines <- c(key_lines, "** excluded from restricted scoring")
+    } else if (length(excl_cols) > 0) {
+      key_lines <- c(key_lines, "* excluded from restricted scoring")
+    }
+    if (length(const_cols) > 0) {
+      key_lines <- c(key_lines,
+        "C = Pearson r undefined because at least one item is constant")
+    }
+    cap_full    <- if (length(key_lines) > 0) paste(key_lines, collapse = "\n") else NULL
+    scoring_lbl <- if (length(excl_cols) > 0) {
+      paste0("Restricted scoring: ",
+             paste(toupper(excl_cols), collapse = " and "), " excluded")
+    } else {
+      NULL
+    }
 
     p <- ggplot2::ggplot(long,
         ggplot2::aes(x = .data$col_lbl, y = .data$row_lbl, fill = .data$r_fill)) +
@@ -1327,7 +1433,7 @@ if (!is.null(.raw_data_27)) {
       ggplot2::geom_text(
         data = dplyr::filter(long, !.data$on_diag),
         ggplot2::aes(x = .data$col_lbl, y = .data$row_lbl,
-                     label = sprintf("%.2f", .data$value)),
+                     label = .data$cell_text),
         size = 2.5, colour = "grey10", inherit.aes = FALSE
       ) +
       ggplot2::scale_fill_gradient2(
@@ -1347,32 +1453,57 @@ if (!is.null(.raw_data_27)) {
         axis.text.x     = ggplot2::element_text(angle = 45, hjust = 1, size = 8),
         axis.text.y     = ggplot2::element_text(size = 8),
         legend.position = "right",
-        panel.grid      = ggplot2::element_blank()
+        panel.grid      = ggplot2::element_blank(),
+        plot.subtitle   = ggplot2::element_text(size = 8, colour = "grey30",
+                                                margin = ggplot2::margin(b = 4)),
+        plot.caption    = ggplot2::element_text(size = 7, hjust = 0,
+                                                lineheight = 1.2,
+                                                colour = "grey40")
       )
 
-    if (length(excl_cols) > 0) {
-      p <- p + ggplot2::labs(caption = "* Item excluded from restricted scoring")
-    }
-    p
+    # In two-level mode the axis/cell markers already convey the exclusion
+    # context; suppress the "Restricted scoring: ..." subtitle so the figure
+    # reads as a neutral cross-run descriptive rather than a single-run output.
+    .subtitle_lbl <- if (two_level) NULL else scoring_lbl
+    if (!is.null(.subtitle_lbl) || !is.null(cap_full))
+      p <- p + ggplot2::labs(subtitle = .subtitle_lbl, caption = cap_full)
+
+    list(plot = p, n_items = n_items)
   }
 
   .sz <- function(n) max(4.5, n * 0.65)
-  .nx <- length(.raw_data_27$x_cols_full)
-  .ny <- length(.raw_data_27$y_cols_full)
 
-  fig27x <- .corr_heatmap(.raw_data_27$x_items, .raw_data_27$x_cols_full,
-                            .raw_data_27$x_excluded,
-                            paste0(form_x_lbl, " Item"))
-  save_figure(fig27x, "item_intercorrelation_heatmap_x",
-              subfolder = "item_analysis",
-              width = .sz(.nx) + 1.5, height = .sz(.nx))
+  # Read cross-run exclusion context injected by 08_comparison_figures.R.
+  # HEATMAP_EXCL_ALWAYS_X / _Y : comma-separated item names excluded in ALL
+  # comparison variants; these receive "**" markers instead of "*".
+  # When the env var is absent (normal single-run invocation), excl_always = NULL
+  # and the function falls back to single-level "*" markers for all excl_cols.
+  .parse_env_excl <- function(var) {
+    ev <- Sys.getenv(var, "")
+    if (nzchar(ev)) trimws(strsplit(ev, ",")[[1]]) else NULL
+  }
+  .excl_always_x_env <- .parse_env_excl("HEATMAP_EXCL_ALWAYS_X")
+  .excl_always_y_env <- .parse_env_excl("HEATMAP_EXCL_ALWAYS_Y")
 
-  fig27y <- .corr_heatmap(.raw_data_27$y_items, .raw_data_27$y_cols_full,
-                            .raw_data_27$y_excluded,
-                            paste0(form_y_lbl, " Item"))
-  save_figure(fig27y, "item_intercorrelation_heatmap_y",
+  fig27x_res <- .corr_heatmap(.raw_data_27$x_items,
+                               .raw_data_27$x_cols_full,
+                               .raw_data_27$x_excluded,
+                               paste0(form_x_lbl, " Item"),
+                               excl_always = .excl_always_x_env)
+  .nx_shown  <- fig27x_res$n_items
+  save_figure(fig27x_res$plot, "item_intercorrelation_heatmap_x",
               subfolder = "item_analysis",
-              width = .sz(.ny) + 1.5, height = .sz(.ny))
+              width = .sz(.nx_shown) + 1.5, height = .sz(.nx_shown))
+
+  fig27y_res <- .corr_heatmap(.raw_data_27$y_items,
+                               .raw_data_27$y_cols_full,
+                               .raw_data_27$y_excluded,
+                               paste0(form_y_lbl, " Item"),
+                               excl_always = .excl_always_y_env)
+  .ny_shown  <- fig27y_res$n_items
+  save_figure(fig27y_res$plot, "item_intercorrelation_heatmap_y",
+              subfolder = "item_analysis",
+              width = .sz(.ny_shown) + 1.5, height = .sz(.ny_shown))
 } else {
   log_warn("raw_data unavailable \u2014 Figure 27 (inter-item correlation heatmap) skipped.")
 }
@@ -1385,11 +1516,26 @@ if (!is.null(.raw_data_27)) {
 if (!is.null(.raw_data_27)) {
   log_h2("Figure 28: Item response matrix")
 
-  .resp_matrix <- function(items_df, cols_full, excl_cols, form_lbl) {
+  .resp_matrix <- function(items_df, cols_full, excl_cols, form_lbl,
+                            excl_always = NULL) {
+    # excl_always : (optional) subset of excl_cols excluded in ALL comparison
+    #   variants — these receive "**" axis markers.  Remaining excl_cols items
+    #   receive "*".  When NULL (single-run mode) all excl_cols receive "*".
+    #   Mirrors the two-level logic in .corr_heatmap().
     .num_ord <- suppressWarnings(as.numeric(sub("^[xy]", "", cols_full)))
     .col_ord <- cols_full[order(.num_ord)]
-    .col_lbl <- toupper(.col_ord)
-    .col_lbl[.col_ord %in% excl_cols] <- paste0(.col_lbl[.col_ord %in% excl_cols], "*")
+
+    # Two-level exclusion sets.
+    .ea28     <- if (!is.null(excl_always)) excl_always else character(0)
+    .es28     <- setdiff(excl_cols, .ea28)
+    .two28    <- !is.null(excl_always) && length(.ea28) > 0 && length(.es28) > 0
+
+    # Axis labels with ** / * suffixes.
+    .col_lbl <- vapply(.col_ord, function(col) {
+      if (!is.null(excl_always) && col %in% .ea28) paste0(toupper(col), "**")
+      else if (col %in% excl_cols)                 paste0(toupper(col), "*")
+      else                                          toupper(col)
+    }, character(1))
 
     .part_ord <- .part_levels(as.character(items_df$participant))
 
@@ -1412,7 +1558,18 @@ if (!is.null(.raw_data_27)) {
 
     n_p    <- length(.part_ord)
     ytxt   <- max(5L, 9L - n_p %/% 4L)
-    h_excl <- length(excl_cols) > 0
+
+    # Caption — two-level when excl_always provided and both sets non-empty.
+    .cap28 <- if (.two28) {
+      paste0("** excluded in both restricted variants\n",
+             "*  excluded only in the stricter restricted variant")
+    } else if (length(.ea28) > 0) {
+      "** excluded from restricted scoring"
+    } else if (length(excl_cols) > 0) {
+      "* Item excluded from restricted scoring"
+    } else {
+      NULL
+    }
 
     ggplot2::ggplot(long, ggplot2::aes(x = .data$item, y = .data$participant,
                                         fill = .data$correct)) +
@@ -1426,7 +1583,7 @@ if (!is.null(.raw_data_27)) {
         x       = NULL,
         y       = "Participant",
         title   = paste0(form_lbl, ": Item Response Pattern"),
-        caption = if (h_excl) "* Item excluded from restricted scoring" else NULL
+        caption = .cap28
       ) +
       ggplot2::theme_minimal(base_size = 10) +
       ggplot2::theme(
@@ -1443,14 +1600,14 @@ if (!is.null(.raw_data_27)) {
   .np_y28 <- nrow(.raw_data_27$y_items)
 
   fig28x <- .resp_matrix(.raw_data_27$x_items, .raw_data_27$x_cols_full,
-                          .raw_data_27$x_excluded, form_x_lbl)
+                          .raw_data_27$x_excluded, form_x_lbl, .excl_always_x_env)
   save_figure(fig28x, "item_response_matrix_x",
               subfolder = "exploratory",
               width  = max(5, .ni_x28 * 0.55) + 1.5,
               height = max(4, .np_x28 * 0.30) + 1.5)
 
   fig28y <- .resp_matrix(.raw_data_27$y_items, .raw_data_27$y_cols_full,
-                          .raw_data_27$y_excluded, form_y_lbl)
+                          .raw_data_27$y_excluded, form_y_lbl, .excl_always_y_env)
   save_figure(fig28y, "item_response_matrix_y",
               subfolder = "exploratory",
               width  = max(5, .ni_y28 * 0.55) + 1.5,
@@ -1471,11 +1628,17 @@ if (!is.null(.raw_data_27)) {
     sequence_group = .data$sequence_group
   )
 
-  .endorse_long_29 <- function(items_df, cols_full, excl_cols, form_lbl) {
+  .endorse_long_29 <- function(items_df, cols_full, excl_cols, form_lbl,
+                               excl_always = NULL) {
+    # excl_always : same two-level logic as .resp_matrix() / .corr_heatmap().
     .num_ord <- suppressWarnings(as.numeric(sub("^[xy]", "", cols_full)))
     .col_ord <- cols_full[order(.num_ord)]
-    .col_lbl <- toupper(.col_ord)
-    .col_lbl[.col_ord %in% excl_cols] <- paste0(.col_lbl[.col_ord %in% excl_cols], "*")
+    .ea29     <- if (!is.null(excl_always)) excl_always else character(0)
+    .col_lbl <- vapply(.col_ord, function(col) {
+      if (!is.null(excl_always) && col %in% .ea29) paste0(toupper(col), "**")
+      else if (col %in% excl_cols)                 paste0(toupper(col), "*")
+      else                                          toupper(col)
+    }, character(1))
 
     items_df |>
       dplyr::mutate(participant = as.character(.data$participant)) |>
@@ -1493,9 +1656,9 @@ if (!is.null(.raw_data_27)) {
 
   .long29 <- dplyr::bind_rows(
     .endorse_long_29(.raw_data_27$x_items, .raw_data_27$x_cols_full,
-                     .raw_data_27$x_excluded, form_x_lbl),
+                     .raw_data_27$x_excluded, form_x_lbl, .excl_always_x_env),
     .endorse_long_29(.raw_data_27$y_items, .raw_data_27$y_cols_full,
-                     .raw_data_27$y_excluded, form_y_lbl)
+                     .raw_data_27$y_excluded, form_y_lbl, .excl_always_y_env)
   )
 
   .summ29 <- .long29 |>
@@ -1513,6 +1676,24 @@ if (!is.null(.raw_data_27)) {
   )
   has_excl29     <- length(.raw_data_27$x_excluded) > 0 ||
                     length(.raw_data_27$y_excluded) > 0
+  # Two-level caption for Figure 29 — combine X and Y exclusion contexts.
+  .ea29_x <- if (!is.null(.excl_always_x_env)) .excl_always_x_env else character(0)
+  .ea29_y <- if (!is.null(.excl_always_y_env)) .excl_always_y_env else character(0)
+  .es29_x <- setdiff(.raw_data_27$x_excluded, .ea29_x)
+  .es29_y <- setdiff(.raw_data_27$y_excluded, .ea29_y)
+  .two29  <- (!is.null(.excl_always_x_env) || !is.null(.excl_always_y_env)) &&
+             (length(.ea29_x) > 0 || length(.ea29_y) > 0) &&
+             (length(.es29_x) > 0 || length(.es29_y) > 0)
+  .cap29  <- if (.two29) {
+    paste0("** excluded in both restricted variants\n",
+           "*  excluded only in the stricter restricted variant")
+  } else if (length(.ea29_x) > 0 || length(.ea29_y) > 0) {
+    "** excluded from restricted scoring"
+  } else if (has_excl29) {
+    "* Item excluded from restricted scoring"
+  } else {
+    NULL
+  }
   .n_items_max29 <- max(length(.raw_data_27$x_cols_full),
                         length(.raw_data_27$y_cols_full))
 
@@ -1530,7 +1711,7 @@ if (!is.null(.raw_data_27)) {
     ggplot2::labs(
       x       = NULL,
       y       = "% Correct",
-      caption = if (has_excl29) "* Item excluded from restricted scoring" else NULL
+      caption = .cap29
     ) +
     theme_clean() +
     ggplot2::theme(

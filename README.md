@@ -25,7 +25,63 @@ to run it.
 
 ---
 
+## Data privacy and repository safety
+
+**This repository contains only safe example data.**
+Real participant data is kept entirely outside this repository and must never be committed.
+
+### What this repository contains (public / safe to share)
+
+| | Location |
+|---|---|
+| Pipeline code | `R/` |
+| Example dataset (100 synthetic participants) | `study_data/example_data/` |
+| Example dataset config | `config/example_data.yml` |
+| Comparison configs | `config/` (see [Canonical configs](#canonical-configs) below) |
+| Documentation | `README.md`, `config/README.md`, `study_data/README.md` |
+| Launcher scripts | `RunPipeline.bat`, `Run-Pipeline.ps1` |
+
+### What must remain local (never commit)
+
+| | Why |
+|---|---|
+| Real study CSV files | Contain participant-level data |
+| Any file with participant emails or identifiers | Privacy |
+| `study_data/<real study folder>/` | Real participant data lives here locally |
+| `.rds` files produced by real runs | Derived participant-level data |
+| `outputs/<real run>/` | All derived outputs from real data |
+| `outputs/<real run>/InternalUse/` | Participant email map is written here |
+| Pipeline logs from real runs | May contain participant identifiers |
+
+All of the above are blocked by `.gitignore`. Do not override or bypass it.
+See [`study_data/README.md`](study_data/README.md) for instructions on placing and running local data.
+
+### Safe-to-push rule of thumb
+
+**Safe:** `R/` code · `config/` files · `study_data/example_data/` · documentation · `.gitignore` · launcher scripts
+
+**Not safe:** real study CSVs · participant email files · `.rds` files from real runs · `outputs/` from real runs · any `InternalUse/` directory · pipeline logs containing participant identifiers
+
+When in doubt: run `git status` and inspect `git diff --cached` before every push.
+
+### Canonical configs
+
+| Purpose | File |
+|---|---|
+| Run the example dataset (public, safe) | [`config/example_data.yml`](config/example_data.yml) |
+| Canonical research comparison (local only — references local run outputs) | [`config/Comparison_Y1_Y1&Y6_Excluded.yml`](config/Comparison_Y1_Y1&Y6_Excluded.yml) |
+| Archived / superseded configs | `config/archive/` |
+
+The canonical comparison config references two runs (`PilotData_N15_excl_y1` and
+`PilotData_N15_excl_y1_y6`) whose source data and outputs exist only on the
+researcher's local machine. A fresh clone can verify the pipeline using
+`config/example_data.yml` and the example dataset; see [Quick start](#1-quick-start).
+
+---
+
 ## Contents
+
+- [Data privacy and repository safety](#data-privacy-and-repository-safety)
 
 1. [Quick start](#1-quick-start)
 2. [Study design](#2-study-design)

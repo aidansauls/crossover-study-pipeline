@@ -81,39 +81,69 @@ item_analysis <- function(items_df, item_cols, form_label, excluded_cols = chara
     TRUE              ~ "Hard (<50%)"
   )
   
-  # --- Flag items ---
-  flag <- dplyr::case_when(
-    item_cols %in% excluded_cols ~ "excluded",
-    p_correct > 0.95 | p_correct < 0.05 ~ "extreme difficulty",
-    ir_corr < 0.10 ~ "low discrimination",
-    TRUE           ~ ""
-  )
+  # --- Item variance and missingness (for zero-variance / undefined-corr audit) ---
+  item_var   <- apply(mat, 2, function(x) var(as.numeric(x), na.rm = TRUE))
+  n_miss_pct <- colMeans(is.na(mat)) * 100
+
+  # --- Flag items (semicolon-separated; multiple flags per item are allowed) ---
+  flag <- mapply(function(col, i) {
+    if (col %in% excluded_cols) return("excluded")
+    flgs <- character(0)
+    # Zero variance: all-correct, all-incorrect, or any other constant vector.
+    # These items produce undefined correlations and must be logged explicitly.
+    if (!is.na(item_var[[i]]) && item_var[[i]] == 0) {
+      if (!is.na(p_correct[[i]]) && p_correct[[i]] >= 1.0)
+        return("all correct (p=1.00); zero variance; correlations undefined")
+      if (!is.na(p_correct[[i]]) && p_correct[[i]] <= 0.0)
+        return("all incorrect (p=0.00); zero variance; correlations undefined")
+      return("zero variance; correlations undefined")
+    }
+    # Undefined correlations without zero variance (e.g., very high missingness)
+    if (is.na(ir_corr[[i]]) || is.na(pb_whole[[i]]))
+      flgs <- c(flgs, "undefined correlation (check for near-constant vector or missingness)")
+    # High missingness
+    if (!is.na(n_miss_pct[[i]]) && n_miss_pct[[i]] >= 20)
+      flgs <- c(flgs, sprintf("high missingness (%.0f%%)", n_miss_pct[[i]]))
+    # Extreme difficulty
+    if (!is.na(p_correct[[i]]) && p_correct[[i]] > 0.95)
+      flgs <- c(flgs, "extreme difficulty (ceiling)")
+    else if (!is.na(p_correct[[i]]) && p_correct[[i]] < 0.05)
+      flgs <- c(flgs, "extreme difficulty (floor)")
+    # Low discrimination (only when correlation is defined and no other flags yet)
+    if (!is.na(ir_corr[[i]]) && ir_corr[[i]] < 0.10 && length(flgs) == 0)
+      flgs <- c(flgs, "low discrimination")
+    paste(flgs, collapse = "; ")
+  }, col = item_cols, i = seq_along(item_cols),
+  SIMPLIFY = TRUE, USE.NAMES = FALSE)
   
   result_tbl <- tibble::tibble(
-    form            = form_label,
-    item            = item_cols,
-    n               = n,
-    p_correct       = p_correct,
-    difficulty_cat  = difficulty_cat,
-    pb_corr         = pb_whole,
-    item_rest_corr  = ir_corr,
+    form             = form_label,
+    item             = item_cols,
+    n                = n,
+    p_correct        = p_correct,
+    difficulty_cat   = difficulty_cat,
+    pb_corr          = pb_whole,
+    item_rest_corr   = ir_corr,
     alpha_if_deleted = alpha_del,
-    excluded        = item_cols %in% excluded_cols,
-    flag            = flag
+    n_miss_pct       = n_miss_pct,
+    excluded         = item_cols %in% excluded_cols,
+    flag             = flag
   )
 
   # Log per-item details so the log is a standalone audit trail
-  log_line(sprintf("  %-6s  %-22s  p_cor  pb_r   ir_r   a_del  flag",
+  .fmt_r <- function(x) if (is.na(x)) "    NA" else sprintf("%+.3f", x)
+  .fmt_f <- function(x) if (is.na(x)) "    NA" else sprintf("%.3f",  x)
+  log_line(sprintf("  %-6s  %-22s  p_cor  pb_r    ir_r    a_del   flag",
                    "Item", "Difficulty"))
   for (i in seq_len(nrow(result_tbl))) {
     r <- result_tbl[i, ]
-    log_line(sprintf("  %-6s  %-22s  %.3f  %+.3f  %+.3f  %.3f  %s",
+    log_line(sprintf("  %-6s  %-22s  %.3f  %s  %s  %s  %s",
       toupper(r$item),
       r$difficulty_cat,
       r$p_correct,
-      r$pb_corr,
-      r$item_rest_corr,
-      r$alpha_if_deleted,
+      .fmt_r(r$pb_corr),
+      .fmt_r(r$item_rest_corr),
+      .fmt_f(r$alpha_if_deleted),
       if (nzchar(r$flag)) paste0("[", r$flag, "]") else "-"))
   }
 
@@ -399,27 +429,36 @@ log_check("DIF-by-period flags (p<.05): ",
 # =============================================================================
 log_h2("Ability-stratified item analysis")
 
-n_strata <- as.integer(cfg_get("psychometrics", "ability_strata", default = 4L))
-strata_labels <- paste0("Q", seq_len(n_strata),
-                        c("(low)", rep("", n_strata - 2), "(high)")[
-                          pmax(1, pmin(c(1, rep(2, n_strata-2), 3), 3))])
-strata_labels <- paste0("Q", seq_len(n_strata))   # simple Qn labels
+n_strata <- as.integer(cfg_get("psychometrics", "ability_strata", default = 3L))
+# Prefix: T = tertile (3), Q = quartile (4), S = other
+strata_prefix <- switch(as.character(n_strata), "3" = "T", "4" = "Q", "S")
+strata_labels <- paste0(strata_prefix, seq_len(n_strata))
 
 score_stratified_item_analysis <- function(items_df, item_cols,
                                             total_scores, form_label,
-                                            n_q = 4L) {
+                                            n_q = 3L,
+                                            s_prefix = "T") {
   breaks  <- unique(quantile(total_scores, probs = seq(0, 1, 1/n_q), na.rm = TRUE))
   if (length(breaks) < 2) {
     log_warn("Cannot create ability strata for ", form_label,
              " — not enough unique scores.")
     return(NULL)
   }
-  q_labels <- paste0("Q", seq_len(length(breaks) - 1))
+  n_effective <- length(breaks) - 1L
+  if (n_effective < n_q) {
+    log_warn("Score ties reduced strata from ", n_q, " to ", n_effective,
+             " for ", form_label)
+  }
+  q_labels <- paste0(s_prefix, seq_len(n_effective))
   ability_q <- cut(total_scores, breaks = breaks, labels = q_labels,
                    include.lowest = TRUE)
 
   mat <- as.matrix(dplyr::select(items_df, dplyr::all_of(item_cols)))
   storage.mode(mat) <- "numeric"
+
+  # Compute per-stratum N once (used for axis labels later)
+  stratum_ns <- vapply(q_labels, function(q)
+    sum(!is.na(ability_q) & ability_q == q), integer(1L))
 
   purrr::map_dfr(seq_along(item_cols), function(i) {
     col   <- item_cols[i]
@@ -429,26 +468,52 @@ score_stratified_item_analysis <- function(items_df, item_cols,
       vals <- iv[idx]
       vals <- vals[!is.na(vals)]
       tibble::tibble(
-        form            = form_label,
-        item            = col,
+        form             = form_label,
+        item             = col,
         ability_quartile = q,
-        n               = length(vals),
-        p_correct       = if (length(vals) > 0) mean(vals) else NA_real_
+        stratum_n        = stratum_ns[[q]],
+        n                = length(vals),
+        p_correct        = if (length(vals) > 0) mean(vals) else NA_real_
       )
     })
   })
 }
 
-# Compute from total-score on the full item set
-x_total_scores <- rowSums(
-  dplyr::select(x_items, dplyr::all_of(x_cols_full)), na.rm = TRUE)
-y_total_scores <- rowSums(
-  dplyr::select(y_items, dplyr::all_of(y_cols_full)), na.rm = TRUE)
+# Compute combined (global) total score: X raw total + Y raw total, matched by
+# participant.  Using a global score means both form panels share the same
+# strata — T2 in the Form X facet and T2 in the Form Y facet are the same
+# participants — which is the only meaningful basis for cross-form comparison.
+# It also eliminates within-form score circularity.
+.x_totals_df <- dplyr::tibble(
+  participant   = x_items$participant,
+  x_total       = rowSums(dplyr::select(x_items, dplyr::all_of(x_cols_full)),
+                           na.rm = TRUE)
+)
+.y_totals_df <- dplyr::tibble(
+  participant   = y_items$participant,
+  y_total       = rowSums(dplyr::select(y_items, dplyr::all_of(y_cols_full)),
+                           na.rm = TRUE)
+)
+.combined_df <- dplyr::full_join(.x_totals_df, .y_totals_df, by = "participant") |>
+  dplyr::mutate(
+    combined_total = dplyr::coalesce(.data$x_total, 0L) +
+                     dplyr::coalesce(.data$y_total, 0L)
+  )
+
+# Align combined score to each form's item data frame row order via participant
+combined_scores_x <- .combined_df$combined_total[
+  match(x_items$participant, .combined_df$participant)]
+combined_scores_y <- .combined_df$combined_total[
+  match(y_items$participant, .combined_df$participant)]
+
+log_check("Combined total score range: ",
+          min(.combined_df$combined_total, na.rm = TRUE), "–",
+          max(.combined_df$combined_total, na.rm = TRUE))
 
 strat_x <- score_stratified_item_analysis(
-  x_items, x_cols_full, x_total_scores, form_x_label, n_strata)
+  x_items, x_cols_full, combined_scores_x, form_x_label, n_strata, strata_prefix)
 strat_y <- score_stratified_item_analysis(
-  y_items, y_cols_full, y_total_scores, form_y_label, n_strata)
+  y_items, y_cols_full, combined_scores_y, form_y_label, n_strata, strata_prefix)
 strat_all <- dplyr::bind_rows(strat_x, strat_y)
 
 log_df(strat_all, "Ability-stratified item analysis")
@@ -512,13 +577,13 @@ detect_suspicious_items <- function(strat_df, ia_df, form_label) {
     if (!is.na(p_top) && !is.na(p_bot) && p_bot > p_top)
       flags <- c(flags, "reversed discrimination")
 
-    # check for any inversion across adjacent quartiles
+    # check for any inversion across adjacent ability strata
     q_ord  <- q_levs
     p_ord  <- p_by_q[q_ord]
     if (sum(!is.na(p_ord)) >= 2) {
       p_ord2 <- p_ord[!is.na(p_ord)]
       if (any(diff(p_ord2) < -0.10))   # a drop >10pp going up the ability scale
-        flags <- c(flags, "non-monotone across Q")
+        flags <- c(flags, "non-monotone across strata")
     }
 
     # low or negative item-rest correlation is suspect (configurable threshold)
@@ -649,9 +714,9 @@ tbl_items <- ia_combined |>
     Flag          = .data$flag
   )
 
-save_table(tbl_items, "item_analysis",
+save_table(tbl_items, "item_analysis_full",
            subfolder = "psychometrics",
-           caption   = "Item-level psychometric statistics for both test forms")
+           caption   = "Item-level psychometric statistics for both test forms (full detail: includes Point-Biserial r)")
 
 # --- Table: Reliability summary ---
 fmt_rel <- function(r) {
@@ -675,9 +740,9 @@ tbl_reliability <- dplyr::bind_rows(
   if (length(y_excluded) > 0) fmt_rel(rel_y_restricted) else NULL
 )
 
-save_table(tbl_reliability, "reliability_summary",
+save_table(tbl_reliability, "reliability_summary_full",
            subfolder = "psychometrics",
-           caption   = "Internal consistency and reliability for both test forms")
+           caption   = "Internal consistency and reliability for both test forms (full detail: includes Mean inter-item r, raw Split-half r)")
 
 # --- Table: DIF ---
 tbl_dif <- dif |>
@@ -857,11 +922,18 @@ if (!is.null(strat_all) && nrow(strat_all) > 0) {
       Flag          = .data$flag
     )
 
-  save_table(tbl_strat, "ability_stratified_item_difficulty",
+  .strat_type_label <- switch(as.character(n_strata),
+    "3" = "Overall Ability Tertile",
+    "4" = "Overall Ability Quartile",
+    "Overall Ability Stratum"
+  )
+  save_table(tbl_strat, "ability_stratified_item_difficulty_extended",
              subfolder = "psychometrics",
              caption   = paste0(
-               "Item difficulty (proportion correct) by ability quartile ",
-               "(Q1=lowest, Q", n_strata, "=highest). ",
+               "Item difficulty (proportion correct) by ", tolower(.strat_type_label), " ",
+               "(", strata_labels[1], "=lowest, ",
+               strata_labels[length(strata_labels)], "=highest; ",
+               "strata based on combined raw score across both forms — same participants in each stratum across both facets). ",
                "Red flags: inverted or flat gradients indicate poor discrimination."))
 }
 
@@ -881,7 +953,7 @@ if (!is.null(suspicious_all) && nrow(suspicious_all) > 0) {
     ) |>
     dplyr::arrange(dplyr::desc(.data$Suspicious), dplyr::desc(.data$Flags))
 
-  save_table(tbl_sus, "suspicious_items",
+  save_table(tbl_sus, "suspicious_items_extended",
              subfolder = "psychometrics",
              caption   = paste0(
                "Items flagged for psychometric irregularities. ",
@@ -915,6 +987,32 @@ if (nrow(tbl_miss_item) > 0) {
 
 # ---- Figure: Ability-stratified item difficulty heatmap ----
 if (!is.null(strat_all) && nrow(strat_all) > 0) {
+  # Build axis labels showing stratum ID and n (one row per stratum per form;
+  # take max n across forms so the label is consistent across facets)
+  .strat_n_lookup <- strat_all |>
+    dplyr::distinct(.data$ability_quartile, .data$stratum_n) |>
+    dplyr::group_by(.data$ability_quartile) |>
+    dplyr::summarise(stratum_n = max(.data$stratum_n, na.rm = TRUE),
+                     .groups = "drop")
+  .strat_axis_labels <- stats::setNames(
+    paste0(.strat_n_lookup$ability_quartile,
+           "\n(n=", .strat_n_lookup$stratum_n, ")"),
+    .strat_n_lookup$ability_quartile
+  )
+
+  .strat_type_label <- switch(as.character(n_strata),
+    "3" = "Overall Ability Tertile",
+    "4" = "Overall Ability Quartile",
+    "Overall Ability Stratum"
+  )
+  .strat_low_label  <- strata_labels[1]
+  .strat_high_label <- strata_labels[length(strata_labels)]
+  .strat_xlab <- paste0(
+    .strat_type_label,
+    " (combined raw score, both forms; ",
+    .strat_low_label, " = lowest, ", .strat_high_label, " = highest; n per stratum in parentheses)"
+  )
+
   fig_strat <- strat_all |>
     dplyr::mutate(
       item_num   = as.numeric(gsub("^\\D+", "", .data$item)),
@@ -938,8 +1036,9 @@ if (!is.null(strat_all) && nrow(strat_all) > 0) {
       labels  = scales::percent_format(),
       name    = "P(correct)"
     ) +
+    ggplot2::scale_x_discrete(labels = .strat_axis_labels) +
     ggplot2::facet_wrap(~ form, scales = "free_y", ncol = 2) +
-    ggplot2::xlab("Ability Quartile (Q1 = lowest)") +
+    ggplot2::xlab(.strat_xlab) +
     ggplot2::ylab("Item") +
     theme_clean() +
     ggplot2::theme(
@@ -1025,9 +1124,9 @@ if (!is.null(suspicious_all) && nrow(suspicious_all) > 0) {
 
 fig_item_discrim_list <- lapply(list(
   list(items = x_items, cols = x_cols_full, form = form_x_label,
-       total = x_total_scores),
+       total = combined_scores_x),
   list(items = y_items, cols = y_cols_full, form = form_y_label,
-       total = y_total_scores)
+       total = combined_scores_y)
 ), function(fd) {
   if (length(fd$cols) == 0) return(NULL)
   mat <- as.matrix(dplyr::select(fd$items, dplyr::all_of(fd$cols)))

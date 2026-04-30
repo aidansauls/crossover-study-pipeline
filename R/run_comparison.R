@@ -36,3 +36,7 @@ if (length(.this_file) > 0 && nzchar(.this_file[1])) {
 `%||%` <- function(a, b) if (!is.null(a) && length(a) > 0) a else b
 
 source(file.path(r_dir, "08_comparison_figures.R"))
+
+# Exit cleanly. (Ensures exit code 0 when everything succeeds — R's internal
+# session state can be non-zero if external subprocesses ran during the pipeline.)
+quit(status = 0, save = "no")

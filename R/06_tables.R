@@ -106,7 +106,7 @@ format_contrast <- function(res, label) {
     `Mean Diff`   = round(res$mean_diff, 3),
     `95% CI`      = fmt_ci(res$ci_lo, res$ci_hi),
     `Cohen dz`    = round(res$dz, 3),
-    `p`           = ifelse(!is.na(res$p), fmt_p(res$p), "NA")
+    `p`           = ifelse(!is.na(res$p), sub("^= ", "", fmt_p(res$p)), "NA")
   )
 }
 
@@ -125,6 +125,271 @@ tbl3 <- dplyr::bind_rows(tbl3_rows[!sapply(tbl3_rows, is.null)])
 
 save_table(tbl3, "03_primary_contrasts", subfolder = "primary",
            caption = "Paired contrasts: intervention effect and period effect")
+
+# =============================================================================
+# TABLE 00: OVERALL RESULTS  (primary manuscript table)
+# Two rows: AI vs Control, Period 2 vs Period 1 — restricted scoring.
+# A = AI condition / Period 2;  B = Control condition / Period 1.
+# =============================================================================
+log_h2("Table 00: Overall results — primary manuscript table (restricted scoring)")
+
+.restr_label <- {
+  .y_excl <- as.character(unlist(cfg$item_exclusions[["y"]] %||% list()))
+  if (length(.y_excl) > 0 && any(nzchar(.y_excl)))
+    paste0("Restricted (", paste(toupper(.y_excl), collapse = ", "), " excluded)")
+  else
+    "Restricted"
+}
+
+.t00_con <- results$contrast_intervention_restr %||% NULL
+.t00_per <- results$contrast_period_restr       %||% NULL
+.t00_mm  <- results$mixed_models$restricted$model1 %||% NULL
+
+.t00_mm_cond_est <- .t00_mm_cond_p <- .t00_mm_per_est <- .t00_mm_per_p <- NA_character_
+if (!is.null(.t00_mm)) {
+  .t00_coefs      <- as.data.frame(summary(.t00_mm)$coefficients)
+  .t00_coefs$term <- rownames(.t00_coefs)
+  .t00_pcol       <- if ("Pr(>|t|)" %in% names(.t00_coefs)) "Pr(>|t|)" else "p.value"
+  .t00_c          <- .t00_coefs[grepl("condition", .t00_coefs$term, ignore.case = TRUE), ]
+  .t00_p          <- .t00_coefs[grepl("^period",   .t00_coefs$term, ignore.case = TRUE), ]
+  if (nrow(.t00_c) > 0) {
+    .t00_mm_cond_est <- paste0(round(.t00_c$Estimate[1], 3),
+                               " (", round(.t00_c$`Std. Error`[1], 3), ")")
+    .t00_mm_cond_p   <- sub("^= ", "", fmt_p(.t00_c[[.t00_pcol]][1]))
+  }
+  if (nrow(.t00_p) > 0) {
+    .t00_mm_per_est  <- paste0(round(.t00_p$Estimate[1], 3),
+                               " (", round(.t00_p$`Std. Error`[1], 3), ")")
+    .t00_mm_per_p    <- sub("^= ", "", fmt_p(.t00_p[[.t00_pcol]][1]))
+  }
+}
+
+# Two-panel design: Panel A = int_label vs. ctl_label, Panel B = Period 2 vs. Period 1.
+# CSV uses a Panel column + generic Mean A/B labels (notes map A/B per panel).
+# PNG overrides the save_table() output: two separate gt tables stacked via magick,
+# each with its own correctly labelled column headers (all labels config-driven).
+.tbl0_csv_rows <- list()
+.gt_a_df       <- NULL
+.gt_b_df       <- NULL
+
+if (!is.null(.t00_con)) {
+  .tbl0_csv_rows[[1]] <- tibble::tibble(
+    `Panel`       = paste0(int_label, " vs. ", ctl_label),
+    `Scoring`     = .restr_label,
+    `N`           = .t00_con$n,
+    `Mean A (SD)` = paste0(round(.t00_con$mean_a, 2), " (", round(.t00_con$sd_a, 2), ")"),
+    `Mean B (SD)` = paste0(round(.t00_con$mean_b, 2), " (", round(.t00_con$sd_b, 2), ")"),
+    `Mean Diff`   = round(.t00_con$mean_diff, 3),
+    `95% CI`      = fmt_ci(.t00_con$ci_lo, .t00_con$ci_hi),
+    `Cohen dz`    = round(.t00_con$dz, 3),
+    `p`           = if (!is.na(.t00_con$p)) sub("^= ", "", fmt_p(.t00_con$p)) else "NA",
+    `MM Est (SE)` = .t00_mm_cond_est,
+    `MM p`        = .t00_mm_cond_p
+  )
+  .gt_a_df <- tibble::tibble(
+    Scoring                                = .restr_label,
+    N                                      = .t00_con$n,
+    !!paste0(int_label, " Mean (SD)") :=   paste0(round(.t00_con$mean_a, 2), " (", round(.t00_con$sd_a, 2), ")"),
+    !!paste0(ctl_label, " Mean (SD)") :=   paste0(round(.t00_con$mean_b, 2), " (", round(.t00_con$sd_b, 2), ")"),
+    `Mean Diff`          = round(.t00_con$mean_diff, 3),
+    `95% CI`             = fmt_ci(.t00_con$ci_lo, .t00_con$ci_hi),
+    `Cohen dz`           = round(.t00_con$dz, 3),
+    p                    = if (!is.na(.t00_con$p)) sub("^= ", "", fmt_p(.t00_con$p)) else "NA",
+    `MM Est (SE)`        = .t00_mm_cond_est,
+    `MM p`               = .t00_mm_cond_p
+  )
+}
+if (!is.null(.t00_per)) {
+  .tbl0_csv_rows[[2]] <- tibble::tibble(
+    `Panel`       = "Period 2 vs. Period 1",
+    `Scoring`     = .restr_label,
+    `N`           = .t00_per$n,
+    `Mean A (SD)` = paste0(round(.t00_per$mean_a, 2), " (", round(.t00_per$sd_a, 2), ")"),
+    `Mean B (SD)` = paste0(round(.t00_per$mean_b, 2), " (", round(.t00_per$sd_b, 2), ")"),
+    `Mean Diff`   = round(.t00_per$mean_diff, 3),
+    `95% CI`      = fmt_ci(.t00_per$ci_lo, .t00_per$ci_hi),
+    `Cohen dz`    = round(.t00_per$dz, 3),
+    `p`           = if (!is.na(.t00_per$p)) sub("^= ", "", fmt_p(.t00_per$p)) else "NA",
+    `MM Est (SE)` = .t00_mm_per_est,
+    `MM p`        = .t00_mm_per_p
+  )
+  .gt_b_df <- tibble::tibble(
+    Scoring                = .restr_label,
+    N                      = .t00_per$n,
+    `Period 2 Mean (SD)`   = paste0(round(.t00_per$mean_a, 2), " (", round(.t00_per$sd_a, 2), ")"),
+    `Period 1 Mean (SD)`   = paste0(round(.t00_per$mean_b, 2), " (", round(.t00_per$sd_b, 2), ")"),
+    `Mean Diff`            = round(.t00_per$mean_diff, 3),
+    `95% CI`               = fmt_ci(.t00_per$ci_lo, .t00_per$ci_hi),
+    `Cohen dz`             = round(.t00_per$dz, 3),
+    p                      = if (!is.na(.t00_per$p)) sub("^= ", "", fmt_p(.t00_per$p)) else "NA",
+    `MM Est (SE)`          = .t00_mm_per_est,
+    `MM p`                 = .t00_mm_per_p
+  )
+}
+
+tbl0 <- dplyr::bind_rows(.tbl0_csv_rows[!sapply(.tbl0_csv_rows, is.null)])
+
+.tbl0_caption <- paste0(
+  "Primary outcomes, within-subject crossover study (", .restr_label, "). ",
+  "Panel A (", int_label, " vs. ", ctl_label, "): ",
+  int_label, " Mean (SD) and ", ctl_label, " Mean (SD). ",
+  "Panel B (Period 2 vs. Period 1): Period 2 Mean (SD) and Period 1 Mean (SD). ",
+  "Mean Diff = A \u2212 B (paired). dz = Cohen\u2019s dz. ",
+  "MM Est (SE) = linear mixed-model fixed-effect estimate (SE); ",
+  "sequence as covariate, random intercept for participant."
+)
+
+if (!is.null(tbl0) && nrow(tbl0) > 0) {
+
+  # --- CSV (Panel column + generic Mean A/B; notes map A/B per panel) ---
+  save_table(
+    tbl0, "00_overall_results", subfolder = "primary",
+    caption = .tbl0_caption,
+    notes = c(
+      paste0("Panel \u2018", int_label, " vs. ", ctl_label,
+             "\u2019: Mean A (SD) = ", int_label, " mean; Mean B (SD) = ", ctl_label, " mean."),
+      "Panel \u2018Period 2 vs. Period 1\u2019: Mean A (SD) = Period 2 mean; Mean B (SD) = Period 1 mean.",
+      "Mean Diff = A \u2212 B (paired). dz = Cohen\u2019s dz.",
+      "MM Est (SE) = linear mixed-model fixed-effect estimate (SE); sequence as covariate, random intercept for participant."
+    )
+  )
+
+  # --- PNG: two-panel override via magick ---
+  # save_table() above writes a basic single-panel PNG; we overwrite it below.
+  if (requireNamespace("gt",     quietly = TRUE) &&
+      requireNamespace("magick", quietly = TRUE) &&
+      !isFALSE(cfg$tables$export_png)) {
+
+    .tbl0_gt_style <- function(.gt) {
+      .gt |>
+        gt::tab_options(
+          table.font.size                   = 11,
+          column_labels.font.weight         = "bold",
+          table.border.top.color            = "grey30",
+          table.border.bottom.color         = "grey30",
+          column_labels.border.bottom.color = "grey50",
+          data_row.padding                  = gt::px(4)
+        ) |>
+        gt::opt_table_lines("none") |>
+        gt::opt_row_striping()
+    }
+
+    .tmp_a    <- tempfile(fileext = ".png")
+    .tmp_b    <- tempfile(fileext = ".png")
+    .ok_a     <- FALSE
+    .ok_b     <- FALSE
+
+    if (!is.null(.gt_a_df)) {
+      tryCatch({
+        gt::gtsave(
+          gt::gt(.gt_a_df) |>
+            gt::tab_header(title = gt::md(paste0(
+              "**Panel A \u2014 ", int_label, " vs. ", ctl_label, "**"))) |>
+            .tbl0_gt_style(),
+          .tmp_a)
+        .ok_a <- TRUE
+      }, error = function(e)
+        log_warn("00_overall_results Panel A PNG failed: ", conditionMessage(e)))
+    }
+
+    if (!is.null(.gt_b_df)) {
+      tryCatch({
+        gt::gtsave(
+          gt::gt(.gt_b_df) |>
+            gt::tab_header(title = gt::md(
+              "**Panel B \u2014 Period 2 vs. Period 1**")) |>
+            .tbl0_gt_style() |>
+            gt::tab_source_note(gt::md(.tbl0_caption)),
+          .tmp_b)
+        .ok_b <- TRUE
+      }, error = function(e)
+        log_warn("00_overall_results Panel B PNG failed: ", conditionMessage(e)))
+    }
+
+    if (.ok_a && .ok_b) {
+      .img_a <- tryCatch(magick::image_read(.tmp_a), error = function(e) NULL)
+      .img_b <- tryCatch(magick::image_read(.tmp_b), error = function(e) NULL)
+      if (!is.null(.img_a) && !is.null(.img_b)) {
+        .wa <- magick::image_info(.img_a)$width
+        .wb <- magick::image_info(.img_b)$width
+        if (.wa != .wb) {
+          .mw <- max(.wa, .wb)
+          if (.wa < .mw)
+            .img_a <- magick::image_extent(.img_a,
+              paste0(.mw, "x", magick::image_info(.img_a)$height),
+              gravity = "West", color = "white")
+          if (.wb < .mw)
+            .img_b <- magick::image_extent(.img_b,
+              paste0(.mw, "x", magick::image_info(.img_b)$height),
+              gravity = "West", color = "white")
+        }
+        .combined <- magick::image_append(c(.img_a, .img_b), stack = TRUE)
+        .png00    <- out_path("tables_png", "primary", "00_overall_results.png")
+        magick::image_write(.combined, path = .png00)
+        log_line("Table PNG   : tables_png/primary/00_overall_results.png [two-panel]")
+      }
+    }
+    try(file.remove(.tmp_a), silent = TRUE)
+    try(file.remove(.tmp_b), silent = TRUE)
+  }
+
+} else {
+  log_warn("Overall results table (T00) could not be constructed \u2014 check restricted contrast objects.")
+}
+
+# =============================================================================
+# TABLE 00b: STUDY DESIGN  (crossover assignment structure)
+# One row per randomised assignment cell (Sequence group x Form order).
+# Reads assignment.csv directly — static design metadata, not derived from dat.
+# =============================================================================
+log_h2("Table 00b: Study design \u2014 crossover assignment structure")
+
+.asgn_path <- file.path(DATA_DIR, "assignment.csv")
+if (file.exists(.asgn_path)) {
+  .asgn_raw <- tryCatch(
+    read.csv(.asgn_path, stringsAsFactors = FALSE),
+    error = function(e) { log_warn("Could not read assignment.csv: ", e$message); NULL }
+  )
+  if (!is.null(.asgn_raw)) {
+    .design_tbl <- .asgn_raw |>
+      dplyr::mutate(
+        seq_grp = ifelse(.data$AI_Order == "1st",
+                         paste0(int_label, "-first"),
+                         paste0(ctl_label, "-first")),
+        cond_p1 = ifelse(.data$AI_Order == "1st", int_label,   ctl_label),
+        cond_p2 = ifelse(.data$AI_Order == "1st", ctl_label,   int_label),
+        form_p1 = ifelse(.data$X_Order  == "1st", form_x_lbl,  form_y_lbl),
+        form_p2 = ifelse(.data$X_Order  == "1st", form_y_lbl,  form_x_lbl)
+      ) |>
+      dplyr::group_by(seq_grp, cond_p1, cond_p2, form_p1, form_p2) |>
+      dplyr::summarise(n = dplyr::n(), .groups = "drop") |>
+      dplyr::arrange(dplyr::desc(.data$seq_grp), .data$form_p1) |>
+      dplyr::select(
+        `Sequence Group`     = seq_grp,
+        n                    = n,
+        `Period 1 Condition` = cond_p1,
+        `Period 2 Condition` = cond_p2,
+        `Form in Period 1`   = form_p1,
+        `Form in Period 2`   = form_p2
+      )
+    save_table(
+      .design_tbl, "00_study_design", subfolder = "descriptive",
+      caption = paste0(
+        "Crossover study assignment structure. ",
+        "Each row is one randomised assignment cell (Sequence group \u00d7 Form order). ",
+        "Sequence group = randomised condition order: ",
+        int_label, "-first participants received ", int_label, " in Period 1 and ",
+        ctl_label, " in Period 2; ",
+        ctl_label, "-first participants received the reverse. ",
+        "Form assignment is balanced within each sequence group. ",
+        "N total = ", sum(.design_tbl$n), "."
+      )
+    )
+  }
+} else {
+  log_warn("assignment.csv not found at: ", .asgn_path,
+           " \u2014 Table 00b (study design) skipped.")
+}
 
 # =============================================================================
 # TABLE 4: Carryover & Sequence x Period
@@ -182,25 +447,13 @@ save_table(tbl4_seq, "04b_sequence_period_interaction", subfolder = "period_effe
 # =============================================================================
 # TABLE 5: Item Analysis
 # (See also 03_psychometrics.R which saves its own item analysis table)
-# This version is a simplified 2-page summary with flags highlighted.
+# This version was a simplified subset of the full item_analysis table.
+# SUPPRESSED: the canonical output is psychometrics/item_analysis_full (03_psychometrics.R),
+# which additionally includes Point-Biserial r.  That version is richer and should be used
+# directly.  T5 is not written to avoid the ambiguous duplicate.
 # =============================================================================
-log_h2("Table 5: Item analysis summary")
-
-tbl5 <- psych$item_analysis |>
-  dplyr::transmute(
-    Form          = .data$form,
-    Item          = toupper(.data$item),
-    N             = .data$n,
-    `P Correct`   = round(.data$p_correct, 3),
-    `Difficulty`  = .data$difficulty_cat,
-    `Item-Rest r` = round(.data$item_rest_corr, 3),
-    `Alpha-if-Del`= round(.data$alpha_if_deleted, 3),
-    Excluded      = .data$excluded,
-    Note          = .data$flag
-  )
-
-save_table(tbl5, "05_item_analysis_summary", subfolder = "psychometrics",
-           caption = "Item-level difficulty and discrimination")
+log_h2("Table 5: Item analysis summary [SUPPRESSED — see psychometrics/item_analysis_full]")
+log_line("T5 (05_item_analysis_summary) suppressed: psychometrics/item_analysis_full from 03_psychometrics.R is the canonical version and includes Point-Biserial r.")
 
 # =============================================================================
 # TABLE 6: Reliability
@@ -231,8 +484,10 @@ tbl6 <- dplyr::bind_rows(
     make_rel_row(psych$reliability_y_restricted) else NULL
 )
 
-save_table(tbl6, "06_reliability_summary", subfolder = "psychometrics",
-           caption = "Internal consistency: KR-20, alpha, omega, split-half")
+# SUPPRESSED: the canonical output is psychometrics/reliability_summary_full (03_psychometrics.R),
+# which additionally includes Mean inter-item r and raw Split-half r.  That version is richer
+# and should be used directly.  T6 is not written to avoid the ambiguous duplicate.
+log_line("T6 (06_reliability_summary) suppressed: psychometrics/reliability_summary_full from 03_psychometrics.R is the canonical version and includes Mean inter-item r.")
 
 # =============================================================================
 # TABLE 7: Mixed-effects model results
@@ -327,12 +582,12 @@ tbl9 <- dat |>
   dplyr::group_by(.data$sequence_group) |>
   dplyr::summarise(
     n_p1          = dplyr::n(),
-    mean_p1       = round(mean(.data$period1_score_full, na.rm = TRUE), 2),
-    sd_p1         = round(sd(.data$period1_score_full,   na.rm = TRUE), 2),
-    median_p1     = round(stats::median(.data$period1_score_full, na.rm = TRUE), 2),
-    mean_p2       = round(mean(.data$period2_score_full, na.rm = TRUE), 2),
-    sd_p2         = round(sd(.data$period2_score_full,   na.rm = TRUE), 2),
-    median_p2     = round(stats::median(.data$period2_score_full, na.rm = TRUE), 2),
+    mean_p1       = round(mean(.data$period1_score_restricted, na.rm = TRUE), 2),
+    sd_p1         = round(sd(.data$period1_score_restricted,   na.rm = TRUE), 2),
+    median_p1     = round(stats::median(.data$period1_score_restricted, na.rm = TRUE), 2),
+    mean_p2       = round(mean(.data$period2_score_restricted, na.rm = TRUE), 2),
+    sd_p2         = round(sd(.data$period2_score_restricted,   na.rm = TRUE), 2),
+    median_p2     = round(stats::median(.data$period2_score_restricted, na.rm = TRUE), 2),
     .groups = "drop"
   ) |>
   dplyr::transmute(
@@ -350,13 +605,13 @@ tbl9_margins <- dat |>
     Sequence         = "Overall",
     n                = dplyr::n(),
     `Period 1 M (SD)`   = sprintf("%.2f (%.2f)",
-                                  mean(.data$period1_score_full, na.rm = TRUE),
-                                  sd(.data$period1_score_full,   na.rm = TRUE)),
-    `Period 1 Median`   = round(stats::median(.data$period1_score_full, na.rm = TRUE), 2),
+                                  mean(.data$period1_score_restricted, na.rm = TRUE),
+                                  sd(.data$period1_score_restricted,   na.rm = TRUE)),
+    `Period 1 Median`   = round(stats::median(.data$period1_score_restricted, na.rm = TRUE), 2),
     `Period 2 M (SD)`   = sprintf("%.2f (%.2f)",
-                                  mean(.data$period2_score_full, na.rm = TRUE),
-                                  sd(.data$period2_score_full,   na.rm = TRUE)),
-    `Period 2 Median`   = round(stats::median(.data$period2_score_full, na.rm = TRUE), 2)
+                                  mean(.data$period2_score_restricted, na.rm = TRUE),
+                                  sd(.data$period2_score_restricted,   na.rm = TRUE)),
+    `Period 2 Median`   = round(stats::median(.data$period2_score_restricted, na.rm = TRUE), 2)
   )
 
 tbl9 <- dplyr::bind_rows(tbl9, tbl9_margins)
@@ -749,8 +1004,8 @@ if (!is.null(.psych_rds) &&
            " -- item missed by more than ", round(.thr_top * 100), "% of highest-scoring participants"),
     paste0("  (2) Bot-Q hit rate > ",   .thr_bot,
            " -- item correct for more than ", round(.thr_bot * 100), "% of lowest-scoring participants (possible floor bypass)"),
-    paste0("  (3) Reversed discrimination -- P(correct) lower in top ability quartile than in bottom quartile"),
-    paste0("  (4) Non-monotone across Q -- P(correct) drops >10 percentage points between adjacent ability quartiles"),
+    paste0("  (3) Reversed discrimination -- P(correct) lower in top ability stratum than in bottom stratum"),
+    paste0("  (4) Non-monotone across strata -- P(correct) drops >10 percentage points between adjacent ability strata"),
     paste0("  (5) Item-rest r < ",      .thr_ir,
            " -- item-total correlation below threshold (item may not measure the same construct)")
   )
@@ -765,7 +1020,7 @@ if (!is.null(.psych_rds) &&
 
 # =============================================================================
 # TABLE 18: Ability-stratified item difficulty
-# P(correct) for each item broken out by ability quartile.
+# P(correct) for each item broken out by ability stratum (tertile or quartile).
 # Documents ceiling effects at the item level — "Did high-scorers find
 # every item trivially easy?" and flags for non-monotone patterns.
 # =============================================================================
@@ -782,10 +1037,10 @@ if (!is.null(.psych_rds) &&
       id_cols       = c(form, item),
       names_from    = ability_quartile,
       values_from   = p_correct,
-      names_prefix  = "Q"
+      names_prefix  = ""
     ) |>
     dplyr::rename(Form = form, Item = item) |>
-    dplyr::mutate(dplyr::across(dplyr::starts_with("Q"),
+    dplyr::mutate(dplyr::across(dplyr::where(is.numeric),
                                 ~ round(.x, 3)))
 
   if (!is.null(.psych_rds$suspicious_all) &&
@@ -808,14 +1063,16 @@ if (!is.null(.psych_rds) &&
 
   .flag_notes18 <- c(
     paste0('"# Flags": count of psychometric suspicion criteria triggered for this item (see Table 17 for detail).'),
-    paste0("Q1 = lowest ability quartile, Q4 = highest ability quartile."),
-    paste0("A well-functioning item shows P(correct) increasing monotonically from Q1 to Q4."),
+    paste0("Strata are based on each participant's combined raw score across both forms (X + Y), so the same participants appear in each stratum in both the Form X and Form Y sections."),
+    paste0("Strata are labelled T1\u2013T3 (tertiles; default) or Q1\u2013Q4 (quartiles) depending on study_config.yml ability_strata setting."),
+    paste0("First stratum = lowest overall ability, last stratum = highest overall ability."),
+    paste0("A well-functioning item shows P(correct) increasing monotonically across strata."),
     paste0("Items are ordered by form (X then Y) then item number.")
   )
 
   save_table(tbl18, "18_ability_stratified_item_difficulty",
              subfolder = "item_analysis",
-             caption = "P(correct) by ability quartile for each item; # Flags = suspicion flag count",
+             caption = "P(correct) by ability stratum for each item; # Flags = suspicion flag count",
              notes = .flag_notes18)
 } else {
   log_line("Table 18 skipped: ability-stratified data not available in psychometrics RDS")

@@ -1,7 +1,9 @@
 ## =============================================================================
 ## R/02_score_calculation.R
 ## Build wide (per-participant) and long analysis datasets from item responses.
-## Scores are scaled 0–N (config: scores.scale_to).
+## Scores are common-scale equivalents: correct_included / n_items_included,
+## with explicit proportion, percent-correct, and 0-10-equivalent columns.
+## The legacy *_score_* columns are scaled to config: scores.scale_to.
 ## Both full-item and restricted-item scores are computed when exclusions exist.
 ## Copyright (c) 2026 Aidan Sauls — see LICENSE for terms.
 ## =============================================================================
@@ -35,6 +37,17 @@ has_x_excl    <- length(raw_data$x_excluded) > 0
 has_y_excl    <- length(raw_data$y_excluded) > 0
 has_exclusions <- has_x_excl || has_y_excl
 
+if (length(x_cols_full) == 0 || length(y_cols_full) == 0) {
+  stop("Cannot score: both Form X and Form Y require at least one included item.")
+}
+if (length(x_cols_restricted) == 0 || length(y_cols_restricted) == 0) {
+  stop("Cannot compute restricted scores: item exclusions removed all items from ",
+       if (length(x_cols_restricted) == 0) "Form X" else "",
+       if (length(x_cols_restricted) == 0 && length(y_cols_restricted) == 0) " and " else "",
+       if (length(y_cols_restricted) == 0) "Form Y" else "",
+       ". Leave at least one item per form.")
+}
+
 # Labels
 int_label <- cfg$study$intervention_label %||% "Intervention"
 ctl_label <- cfg$study$control_label      %||% "Control"
@@ -56,19 +69,35 @@ x_scores <- x_items |>
   dplyr::select(participant, dplyr::all_of(x_cols_full)) |>
   dplyr::mutate(
     x_raw_full       = rowSums(dplyr::across(dplyr::all_of(x_cols_full)), na.rm = TRUE),
-    x_score_full     = (.data$x_raw_full / length(x_cols_full)) * scale_to
+    x_correct_included_full = .data$x_raw_full,
+    x_n_items_included_full = length(x_cols_full),
+    x_score_prop_full = .data$x_correct_included_full / .data$x_n_items_included_full,
+    x_score_percent_full = .data$x_score_prop_full * 100,
+    x_score_10_equiv_full = .data$x_score_prop_full * 10,
+    x_score_full     = .data$x_score_prop_full * scale_to
   )
 
 if (has_x_excl) {
   x_scores <- x_scores |>
     dplyr::mutate(
       x_raw_restricted  = rowSums(dplyr::across(dplyr::all_of(x_cols_restricted)), na.rm = TRUE),
-      x_score_restricted = (.data$x_raw_restricted / length(x_cols_restricted)) * scale_to
+      x_correct_included_restricted = .data$x_raw_restricted,
+      x_n_items_included_restricted = length(x_cols_restricted),
+      x_score_prop_restricted =
+        .data$x_correct_included_restricted / .data$x_n_items_included_restricted,
+      x_score_percent_restricted = .data$x_score_prop_restricted * 100,
+      x_score_10_equiv_restricted = .data$x_score_prop_restricted * 10,
+      x_score_restricted = .data$x_score_prop_restricted * scale_to
     )
 } else {
   x_scores <- x_scores |>
     dplyr::mutate(
       x_raw_restricted   = .data$x_raw_full,
+      x_correct_included_restricted = .data$x_correct_included_full,
+      x_n_items_included_restricted = .data$x_n_items_included_full,
+      x_score_prop_restricted = .data$x_score_prop_full,
+      x_score_percent_restricted = .data$x_score_percent_full,
+      x_score_10_equiv_restricted = .data$x_score_10_equiv_full,
       x_score_restricted = .data$x_score_full
     )
 }
@@ -121,19 +150,35 @@ y_scores <- y_items |>
   dplyr::select(participant, dplyr::all_of(y_cols_full)) |>
   dplyr::mutate(
     y_raw_full       = rowSums(dplyr::across(dplyr::all_of(y_cols_full)), na.rm = TRUE),
-    y_score_full     = (.data$y_raw_full / length(y_cols_full)) * scale_to
+    y_correct_included_full = .data$y_raw_full,
+    y_n_items_included_full = length(y_cols_full),
+    y_score_prop_full = .data$y_correct_included_full / .data$y_n_items_included_full,
+    y_score_percent_full = .data$y_score_prop_full * 100,
+    y_score_10_equiv_full = .data$y_score_prop_full * 10,
+    y_score_full     = .data$y_score_prop_full * scale_to
   )
 
 if (has_y_excl) {
   y_scores <- y_scores |>
     dplyr::mutate(
       y_raw_restricted  = rowSums(dplyr::across(dplyr::all_of(y_cols_restricted)), na.rm = TRUE),
-      y_score_restricted = (.data$y_raw_restricted / length(y_cols_restricted)) * scale_to
+      y_correct_included_restricted = .data$y_raw_restricted,
+      y_n_items_included_restricted = length(y_cols_restricted),
+      y_score_prop_restricted =
+        .data$y_correct_included_restricted / .data$y_n_items_included_restricted,
+      y_score_percent_restricted = .data$y_score_prop_restricted * 100,
+      y_score_10_equiv_restricted = .data$y_score_prop_restricted * 10,
+      y_score_restricted = .data$y_score_prop_restricted * scale_to
     )
 } else {
   y_scores <- y_scores |>
     dplyr::mutate(
       y_raw_restricted   = .data$y_raw_full,
+      y_correct_included_restricted = .data$y_correct_included_full,
+      y_n_items_included_restricted = .data$y_n_items_included_full,
+      y_score_prop_restricted = .data$y_score_prop_full,
+      y_score_percent_restricted = .data$y_score_percent_full,
+      y_score_10_equiv_restricted = .data$y_score_10_equiv_full,
       y_score_restricted = .data$y_score_full
     )
 }
@@ -223,7 +268,39 @@ for (.scoring in c("full", "restricted")) {
         .data$form_y_period == 2L ~ .data[[paste0("y_score_", .scoring)]],
         TRUE ~ NA_real_
       )
-    )
+  )
+}
+
+for (.scoring in c("full", "restricted")) {
+  for (.metric in c("score_prop", "score_percent", "score_10_equiv")) {
+    dat <- dat |>
+      dplyr::mutate(
+        !!paste0("intervention_", .metric, "_", .scoring) := dplyr::case_when(
+          .data$form_x_period == .data$intervention_period ~
+            .data[[paste0("x_", .metric, "_", .scoring)]],
+          .data$form_y_period == .data$intervention_period ~
+            .data[[paste0("y_", .metric, "_", .scoring)]],
+          TRUE ~ NA_real_
+        ),
+        !!paste0("control_", .metric, "_", .scoring) := dplyr::case_when(
+          .data$form_x_period == .data$control_period ~
+            .data[[paste0("x_", .metric, "_", .scoring)]],
+          .data$form_y_period == .data$control_period ~
+            .data[[paste0("y_", .metric, "_", .scoring)]],
+          TRUE ~ NA_real_
+        ),
+        !!paste0("period1_", .metric, "_", .scoring) := dplyr::case_when(
+          .data$form_x_period == 1L ~ .data[[paste0("x_", .metric, "_", .scoring)]],
+          .data$form_y_period == 1L ~ .data[[paste0("y_", .metric, "_", .scoring)]],
+          TRUE ~ NA_real_
+        ),
+        !!paste0("period2_", .metric, "_", .scoring) := dplyr::case_when(
+          .data$form_x_period == 2L ~ .data[[paste0("x_", .metric, "_", .scoring)]],
+          .data$form_y_period == 2L ~ .data[[paste0("y_", .metric, "_", .scoring)]],
+          TRUE ~ NA_real_
+        )
+      )
+  }
 }
 
 # Sequence group label
@@ -287,7 +364,49 @@ log_check("control_score_full range: ",
           round(min(dat$control_score_full, na.rm=TRUE),2), "–",
           round(max(dat$control_score_full, na.rm=TRUE),2))
 
+score_metadata <- list(
+  scale_to = scale_to,
+  primary_metric = if (isTRUE(all.equal(scale_to, 100))) {
+    "score_percent"
+  } else if (isTRUE(all.equal(scale_to, 10))) {
+    "score_10_equiv"
+  } else {
+    "score_common_scale"
+  },
+  primary_label = score_metric_label(scale_to = scale_to),
+  full_item_counts = list(
+    x = length(x_cols_full),
+    y = length(y_cols_full)
+  ),
+  restricted_item_counts = list(
+    x = length(x_cols_restricted),
+    y = length(y_cols_restricted)
+  ),
+  full_denominators_equal = length(x_cols_full) == length(y_cols_full),
+  restricted_denominators_equal = length(x_cols_restricted) == length(y_cols_restricted),
+  any_unequal_denominators =
+    length(x_cols_full) != length(y_cols_full) ||
+    length(x_cols_restricted) != length(y_cols_restricted),
+  formula = list(
+    score_prop = "correct_included / n_items_included",
+    score_percent = "score_prop * 100",
+    score_10_equiv = "score_prop * 10",
+    score = "score_prop * scores.scale_to"
+  )
+)
+
+if (isTRUE(score_metadata$any_unequal_denominators)) {
+  log_warn(
+    "Unequal included-item counts detected. Full X/Y=",
+    length(x_cols_full), "/", length(y_cols_full),
+    "; restricted X/Y=", length(x_cols_restricted), "/", length(y_cols_restricted),
+    ". Participant-level analyses must use ", score_metadata$primary_label,
+    " or percent-correct equivalents; unrescaled counts are audit-only."
+  )
+}
+
 save_rds(dat, "analysis_data")
+save_rds(score_metadata, "score_metadata")
 
 # =============================================================================
 # BUILD LONG DATASET

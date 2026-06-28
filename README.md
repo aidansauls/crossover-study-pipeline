@@ -168,6 +168,15 @@ The pipeline always computes **two** scores for every participant:
   before scoring. Useful as a sensitivity check (e.g., "Does the result hold if we
   exclude the item with questionable content validity?").
 
+Scores are denominator-adjusted after item exclusions:
+
+- `score_prop = correct_included / n_items_included`
+- `score_percent = score_prop * 100`
+- `score_10_equiv = score_prop * 10`
+
+The default reported score is a rescaled 0-10 score, not an unrescaled item-count metric.
+This keeps Form X and Form Y comparable when the included item counts differ.
+
 When no items are excluded, full and restricted scores are identical and restricted
 results are not separately reported.
 
@@ -323,7 +332,8 @@ item_exclusions:
 # ============================================================
 scores:
   # All scores are scaled to this maximum for comparability.
-  # E.g. scale_to: 10 makes a 15-item form score range 0-10.
+  # Scores are computed as correct_included / n_items_included, then rescaled.
+  # E.g. scale_to: 10 reports a rescaled 0-10 score even after exclusions.
   scale_to: 10
 
 # ============================================================
@@ -367,7 +377,7 @@ figures:
   color_form_y:   "#B22222"
 
   # Axis labels -- change to match your outcome measure
-  y_axis_score_label: "Score (0-10)"
+  y_axis_score_label: "Rescaled 0-10 score"
   x_axis_form_label:  "Test Form"
 
   # Appearance

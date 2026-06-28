@@ -25,15 +25,20 @@ log_h1("04  STATISTICAL ANALYSES")
 cfg         <- read_config()
 dat         <- load_rds("analysis_data")
 dat_long    <- load_rds("analysis_data_long")
+score_meta  <- tryCatch(load_rds("score_metadata"), error = function(e) NULL)
 
 alpha       <- as.numeric(cfg$analysis$alpha        %||% 0.05)
 ci_level    <- as.numeric(cfg$analysis$ci_level     %||% 0.95)
 min_n_carry <- as.integer(cfg$analysis$min_n_carryover %||% 4)
 scale_to    <- as.numeric(cfg$scores$scale_to       %||% 10)
+score_label <- score_metric_label(score_meta, scale_to)
 int_label   <- cfg$study$intervention_label %||% "Intervention"
 ctl_label   <- cfg$study$control_label      %||% "Control"
 form_x_lbl  <- cfg$study$form_x_label       %||% "Form X"
 form_y_lbl  <- cfg$study$form_y_label       %||% "Form Y"
+
+log_check("Participant-level score metric: ", score_label)
+if (!is.null(score_metric_note(score_meta))) log_warn(score_metric_note(score_meta))
 
 # =============================================================================
 # 1. DESCRIPTIVE STATISTICS
@@ -49,6 +54,7 @@ desc_cols <- c(
       "period1_score_restricted",      "period2_score_restricted") else character(0)
 )
 desc_cols <- intersect(desc_cols, names(dat))
+validate_score_columns(desc_cols, score_meta, "descriptive statistics")
 
 descriptives <- purrr::map_dfr(desc_cols, function(col) {
   x <- dat[[col]]
@@ -85,6 +91,8 @@ run_paired_contrast <- function(scoring) {
   a_col <- paste0("intervention_score_", scoring)
   b_col <- paste0("control_score_",      scoring)
   if (!a_col %in% names(dat) || !b_col %in% names(dat)) return(NULL)
+  validate_score_columns(c(a_col, b_col), score_meta,
+                         paste0("paired intervention contrast (", scoring, ")"))
   paired_summary(dat[[a_col]], dat[[b_col]],
                  label   = paste0(int_label, " vs ", ctl_label, " (", scoring, ")"),
                  ci      = ci_level)
@@ -107,6 +115,8 @@ run_period_contrast <- function(scoring) {
   p1_col <- paste0("period1_score_", scoring)
   p2_col <- paste0("period2_score_", scoring)
   if (!p1_col %in% names(dat) || !p2_col %in% names(dat)) return(NULL)
+  validate_score_columns(c(p2_col, p1_col), score_meta,
+                         paste0("paired period contrast (", scoring, ")"))
   paired_summary(dat[[p2_col]], dat[[p1_col]],  # Period 2 - Period 1
                  label = paste0("Period 2 - Period 1 (", scoring, ")"),
                  ci    = ci_level)
@@ -129,6 +139,8 @@ log_h2("Carryover test (Grizzle)")
 run_carryover <- function(scoring) {
   p1_col <- paste0("period1_score_", scoring)
   if (!p1_col %in% names(dat)) return(NULL)
+  validate_score_columns(p1_col, score_meta,
+                         paste0("carryover test (", scoring, ")"))
   grp_a <- dat[[p1_col]][dat$intervention_period == 1]
   grp_b <- dat[[p1_col]][dat$intervention_period == 2]
   grp_a <- grp_a[!is.na(grp_a)]
@@ -223,6 +235,8 @@ run_seq_period_interaction <- function(scoring) {
   p1_col <- paste0("period1_score_", scoring)
   p2_col <- paste0("period2_score_", scoring)
   if (!p1_col %in% names(dat) || !p2_col %in% names(dat)) return(NULL)
+  validate_score_columns(c(p1_col, p2_col), score_meta,
+                         paste0("sequence x period interaction (", scoring, ")"))
   
   dat_sub <- dat |>
     dplyr::select(participant, intervention_period, p1 = dplyr::all_of(p1_col),
@@ -322,6 +336,8 @@ period_specific_int <- function(scoring) {
   int_col <- paste0("intervention_score_", scoring)
   ctl_col <- paste0("control_score_",      scoring)
   if (!int_col %in% names(dat)) return(NULL)
+  validate_score_columns(c(int_col, ctl_col), score_meta,
+                         paste0("period-specific intervention effect (", scoring, ")"))
 
   dat_ps <- dat |>
     dplyr::mutate(
@@ -418,6 +434,8 @@ subgroup4_contrasts <- function(scoring) {
   ctl_col  <- paste0("control_score_",      scoring)
   if (!int_col %in% names(dat)) return(NULL)
   if (!"subgroup4" %in% names(dat)) return(NULL)
+  validate_score_columns(c(int_col, ctl_col), score_meta,
+                         paste0("4-subgroup contrasts (", scoring, ")"))
 
   purrr::map_dfr(unique(dat$subgroup4), function(sg) {
     rows <- dat[dat$subgroup4 == sg, ]
@@ -466,6 +484,9 @@ if (requireNamespace("lme4", quietly = TRUE) &&
   library(lmerTest)
   
   run_lmer <- function(scoring) {
+    validate_score_columns(paste0(c("intervention", "control"), "_score_", scoring),
+                           score_meta,
+                           paste0("mixed-effects model (", scoring, ")"))
     long_sub <- dat_long |>
       dplyr::filter(.data$scoring == .env$scoring,
                     .data$context %in% c("intervention", "control")) |>
@@ -595,6 +616,8 @@ results <- list(
   alpha               = alpha,
   ci_level            = ci_level,
   scale_to            = scale_to,
+  score_label         = score_label,
+  score_metadata      = score_meta,
   int_label           = int_label,
   ctl_label           = ctl_label,
   descriptives        = descriptives,

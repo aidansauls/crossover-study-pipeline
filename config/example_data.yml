@@ -46,7 +46,7 @@ figures:
   color_control:      "#CD853F"
   color_period1:      "#4682B4"
   color_period2:      "#B22222"
-  y_axis_score_label: "Score (0–15)"
+  y_axis_score_label: "Rescaled 0-15 score"
   x_axis_form_label: "Test Form"
   color_seq_ab: "#2E8B57"
   color_seq_ba: "#8B4513"

@@ -27,7 +27,8 @@ options(stringsAsFactors = FALSE, scipen = 999, warn = 1)
   "psych",            # Psychometrics (alpha, omega, tetrachoric)
   "ragg",             # High-quality PNG renderer
   "ggrepel",          # Non-overlapping labels (suspicious items scatter)
-  "magick"            # PNG stitching for comparison figures (08_comparison_figures.R)
+  "magick",           # PNG stitching for comparison figures (08_comparison_figures.R)
+  "ggforce"           # Rounded rectangles in Figure S1
 )
 
 .install_if_missing <- function(pkg) {
@@ -160,7 +161,28 @@ read_config <- function() {
       include_titles = FALSE, base_font_size = 12, font_family = "sans",
       color_intervention = "#2E8B57", color_control = "#CD853F",
       color_period1 = "#4682B4", color_period2 = "#B22222",
-      y_axis_score_label = "Score (0-10)", x_axis_form_label = "Test Form"
+      y_axis_score_label = "Rescaled 0-10 score", x_axis_form_label = "Test Form"
+    ),
+    flow_diagram = list(
+      generate = FALSE,
+      output_filename = "figure_s1_participant_flow.png",
+      width_in = 7.5,
+      height_in = 5.0,
+      dpi = 300,
+      setup_label = paste0(
+        "Participants (n = {n}) completed lecture + AI guidance,\n",
+        "then were randomized to sequence order"
+      ),
+      control_sequence_label = "Control-first",
+      ai_sequence_label = "AI-first",
+      period1_control_label = "No-AI study (20 min)",
+      period1_ai_label = "AI-assisted study (20 min)",
+      control_short_label = "No-AI study (20 min)",
+      ai_short_label = "AI-assisted study (20 min)",
+      period2_control_label = "No-AI study\n(20 min)",
+      period2_ai_label = "AI-assisted study\n(20 min)",
+      show_row_labels = FALSE,
+      break_duration = "10-15 min"
     ),
     tables = list(
       export_csv = TRUE, export_png = TRUE,
@@ -364,6 +386,63 @@ fmt_p    <- function(p) {
 }
 fmt_ci   <- function(lo, hi, d = 2) {
   sprintf("[%s, %s]", fmt_num(lo, d), fmt_num(hi, d))
+}
+
+# =============================================================================
+# SCORE SCALE HELPERS
+# =============================================================================
+
+score_metric_label <- function(score_meta = NULL, scale_to = NULL) {
+  if (is.null(scale_to)) {
+    scale_to <- suppressWarnings(as.numeric(score_meta$scale_to %||% NA_real_))
+  }
+  if (is.na(scale_to)) scale_to <- 10
+
+  if (isTRUE(all.equal(scale_to, 100))) {
+    "Percent correct"
+  } else if (isTRUE(all.equal(scale_to, 10))) {
+    "Rescaled 0-10 score"
+  } else {
+    paste0("Rescaled 0-", format(scale_to, trim = TRUE), " score")
+  }
+}
+
+score_metric_note <- function(score_meta = NULL) {
+  if (is.null(score_meta) || !isTRUE(score_meta$any_unequal_denominators)) {
+    return(NULL)
+  }
+  paste0(
+    "Scores are common-scale equivalents computed as correct_included / ",
+    "n_items_included, then rescaled; unrescaled item-count values are retained ",
+    "only for audit and item-level diagnostics."
+  )
+}
+
+validate_score_columns <- function(cols, score_meta = NULL,
+                                   context = "score analysis") {
+  cols <- as.character(cols %||% character(0))
+  if (length(cols) == 0 || is.null(score_meta) ||
+      !isTRUE(score_meta$any_unequal_denominators)) {
+    return(invisible(TRUE))
+  }
+
+  raw_like <- grep(
+    "(^|_)(raw|total_correct|correct_included)(_|$)|(^|_)total$",
+    cols,
+    value = TRUE,
+    ignore.case = TRUE
+  )
+  if (length(raw_like) > 0) {
+    stop(
+      "Unsafe score columns in ", context, ": ",
+      paste(raw_like, collapse = ", "),
+      "\nForm X and Form Y have unequal included-item counts in at least one ",
+      "scoring set. Use score_prop, score_percent, score_10_equiv, or the ",
+      "common-scale *_score_full / *_score_restricted columns; do not analyze ",
+      "unrescaled item-count columns."
+    )
+  }
+  invisible(TRUE)
 }
 
 # =============================================================================
@@ -650,6 +729,42 @@ save_figure <- function(plot, name, subfolder = "supplementary",
   invisible(path)
 }
 
+ensure_gt_png_export <- function() {
+  if (!requireNamespace("chromote", quietly = TRUE)) return(invisible(FALSE))
+
+  cache_dir <- file.path(proj_root, ".r-cache")
+  dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
+  if (!nzchar(Sys.getenv("R_USER_CACHE_DIR", unset = ""))) {
+    Sys.setenv(R_USER_CACHE_DIR = cache_dir)
+  }
+  if (!nzchar(Sys.getenv("XDG_CACHE_HOME", unset = ""))) {
+    Sys.setenv(XDG_CACHE_HOME = cache_dir)
+  }
+
+  if (!isTRUE(getOption("crossover.gt_png_export_ready", FALSE))) {
+    chrome_args <- unique(c(
+      "--headless=new",
+      "--disable-gpu",
+      "--force-color-profile=srgb",
+      "--disable-extensions",
+      "--mute-audio",
+      "--no-sandbox",
+      "--disable-dev-shm-usage",
+      "--remote-allow-origins=*",
+      "--disable-background-networking",
+      "--disable-sync"
+    ))
+    chromote::set_default_chromote_object(
+      chromote::Chromote$new(
+        browser = chromote::Chrome$new(args = chrome_args)
+      )
+    )
+    options(crossover.gt_png_export_ready = TRUE)
+  }
+
+  invisible(TRUE)
+}
+
 #' Save a data frame as CSV and optionally PNG (via gt)
 #' @param df        data frame
 #' @param name      base file name
@@ -709,6 +824,7 @@ save_table <- function(df, name, subfolder = "supplementary",
     }
     
     tryCatch({
+      ensure_gt_png_export()
       gt::gtsave(gt_tbl, png_path)
       log_line("Table PNG   : tables_png/", subfolder, "/", basename(png_path))
     }, error = function(e) {
@@ -933,8 +1049,10 @@ write_session_summary_txt <- function(n_ok = 0L, n_err = 0L,
       if (!exists("cfg")) return(character(0))
       alpha_val <- cfg$analysis$alpha    %||% 0.05
       ci_val    <- cfg$analysis$ci_level %||% 0.95
-      x_excl    <- cfg$scores$exclude$x  %||% character(0)
-      y_excl    <- cfg$scores$exclude$y  %||% character(0)
+      x_excl    <- cfg$item_exclusions$x %||% cfg$scores$exclude$x %||% character(0)
+      y_excl    <- cfg$item_exclusions$y %||% cfg$scores$exclude$y %||% character(0)
+      x_excl    <- unlist(x_excl, use.names = FALSE)
+      y_excl    <- unlist(y_excl, use.names = FALSE)
       x_str <- if (length(x_excl) > 0) paste(toupper(x_excl), collapse = ", ") else "none"
       y_str <- if (length(y_excl) > 0) paste(toupper(y_excl), collapse = ", ") else "none"
       c(

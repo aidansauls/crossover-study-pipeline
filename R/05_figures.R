@@ -6,7 +6,7 @@
 ##   - Axis labels come from config (intervention_label, form labels, etc.)
 ##   - Filenames are descriptive
 ##   - All output as PNG at config DPI
-## Copyright (c) 2026 Aidan Sauls — see LICENSE for terms.
+## Copyright (c) 2026 Aidan Sauls Ã¢â‚¬â€ see LICENSE for terms.
 ## =============================================================================
 
 .script_dir <- local({
@@ -26,20 +26,34 @@ cfg      <- read_config()
 dat      <- load_rds("analysis_data")
 results  <- load_rds("analysis_results")
 psych    <- load_rds("psychometrics")
+score_meta <- tryCatch(load_rds("score_metadata"), error = function(e) NULL)
 
 int_label  <- cfg$study$intervention_label %||% "Intervention"
 ctl_label  <- cfg$study$control_label      %||% "Control"
 form_x_lbl <- cfg$study$form_x_label       %||% "Form X"
 form_y_lbl <- cfg$study$form_y_label       %||% "Form Y"
-score_lab  <- cfg_get("figures","y_axis_score_label", default = "Score (0–10)")
 scale_to   <- as.numeric(cfg$scores$scale_to %||% 10)
-# Axis: 1-point integer breaks, zoomed to the floor of the lowest observed score
-score_y_lo     <- floor(min(dat[, grep("_score_(full|restricted)$", names(dat), value = TRUE)], na.rm = TRUE))
-# Allow comparison renderer to force a common lower bound across all runs
+score_lab_cfg <- cfg_get("figures", "y_axis_score_label",
+                         default = score_metric_label(score_meta, scale_to))
+score_lab <- if (isTRUE(score_meta$any_unequal_denominators)) {
+  score_metric_label(score_meta, scale_to)
+} else {
+  score_lab_cfg
+}
+
+score_cols_for_axis <- grep("_score_(full|restricted)$", names(dat), value = TRUE)
+validate_score_columns(score_cols_for_axis, score_meta, "figures")
+if (!is.null(score_metric_note(score_meta))) log_warn(score_metric_note(score_meta))
+
+# Axis: zoomed to the floor of the lowest observed common-scale score.
+score_y_lo <- floor(min(dat[, score_cols_for_axis], na.rm = TRUE))
+
+# Allow comparison renderer to force a common lower bound across all runs.
+# SCORE_Y_LO_OVERRIDE is in the configured common score scale.
 .y_lo_env <- suppressWarnings(as.numeric(Sys.getenv("SCORE_Y_LO_OVERRIDE", unset = "")))
 if (!is.na(.y_lo_env)) {
   score_y_lo <- .y_lo_env
-  log_line("Score axis lower bound overridden to ", score_y_lo, " (common scale)")
+  log_line("Score axis lower bound: ", score_y_lo, " (SCORE_Y_LO_OVERRIDE)")
 }
 score_y_breaks <- seq(score_y_lo, scale_to, by = 1)
 .score_y_scale <- function() ggplot2::scale_y_continuous(
@@ -50,7 +64,7 @@ col_ctl   <- cfg_get("figures","color_control",      default="#CD853F")
 col_p1    <- cfg_get("figures","color_period1",      default="#4682B4")
 col_p2    <- cfg_get("figures","color_period2",      default="#B22222")
 
-# Helper: produce factor levels in numeric order (1, 2, …, 10, 11, …).
+# Helper: produce factor levels in numeric order (1, 2, Ã¢â‚¬Â¦, 10, 11, Ã¢â‚¬Â¦).
 # Falls back to alphabetical if participant IDs aren't all numeric.
 .part_levels <- function(x) {
   u <- as.character(unique(x))
@@ -86,7 +100,7 @@ spaghetti_layer <- function(df, x_col, y_col, group_col, id_col,
 }
 
 # =============================================================================
-# FIGURE 1: Intervention vs Control — paired spaghetti
+# FIGURE 1: Intervention vs Control Ã¢â‚¬â€ paired spaghetti
 # =============================================================================
 log_h2("Figure 1: Intervention vs Control (paired spaghetti)")
 
@@ -194,7 +208,7 @@ df_period <- dat |>
                                 levels = c("Period 1", "Period 2")))
 
 # =============================================================================
-# FIGURE 4: Period effects by sequence — 2-panel
+# FIGURE 4: Period effects by sequence Ã¢â‚¬â€ 2-panel
 # =============================================================================
 log_h2("Figure 4: Period effects by sequence")
 
@@ -313,7 +327,7 @@ if (!is.null(results$mixed_models$full$model1)) {
   
   save_figure(fig6, "mixed_model_fixed_effects", subfolder = "mixed_models")
 } else {
-  log_warn("Mixed models unavailable — Figure 6 skipped.")
+  log_warn("Mixed models unavailable Ã¢â‚¬â€ Figure 6 skipped.")
 }
 
 # =============================================================================
@@ -376,7 +390,7 @@ save_figure(fig7, "per_participant_condition_scores",
             subfolder = "supplementary", width = 9, height = 5)
 
 # =============================================================================
-# FIGURE 8: Score distribution — violin + box, all four conditions
+# FIGURE 8: Score distribution Ã¢â‚¬â€ violin + box, all four conditions
 # =============================================================================
 log_h2("Figure 8: Distribution violin/box")
 
@@ -461,7 +475,7 @@ if ((length(cfg$item_exclusions$y %||% character(0)) > 0 ||
                                  breaks = score_y_breaks) +
     ggplot2::labs(
       x        = "Condition",
-      subtitle = "Within-run comparison — same data, full vs restricted item scoring"
+      subtitle = "Within-run comparison Ã¢â‚¬â€ same data, full vs restricted item scoring"
     ) +
     theme_clean() +
     ggplot2::theme(legend.position = "bottom")
@@ -489,7 +503,7 @@ seq_colors   <- stats::setNames(c(col_seq_ab, col_seq_ba),
                                  c(.seq_ab_lbl, .seq_ba_lbl))
 
 # =============================================================================
-# FIGURE 10: Score delta dotplot (int − ctl, sorted lollipop per participant)
+# FIGURE 10: Score delta dotplot (int Ã¢Ë†â€™ ctl, sorted lollipop per participant)
 # =============================================================================
 log_h2("Figure 10: Score delta dotplot")
 
@@ -580,7 +594,7 @@ if (!is.null(forest_data) && nrow(forest_data) > 0) {
   save_figure(fig11, "effect_size_forest", subfolder = "primary",
               width = 7, height = max(3.5, nrow(forest_data) * 0.8))
 } else {
-  log_warn("No effect size data available — Figure 11 skipped.")
+  log_warn("No effect size data available Ã¢â‚¬â€ Figure 11 skipped.")
 }
 
 # =============================================================================
@@ -615,7 +629,7 @@ fig13 <- ggplot2::ggplot(df_ecdf,
 save_figure(fig13, "score_ecdf_by_condition", subfolder = "descriptive")
 
 # =============================================================================
-# FIGURE 14: Histogram of within-person score differences (int − ctl)
+# FIGURE 14: Histogram of within-person score differences (int Ã¢Ë†â€™ ctl)
 # =============================================================================
 log_h2("Figure 14: Score difference histogram")
 
@@ -656,7 +670,7 @@ save_figure(fig14, "score_difference_histogram", subfolder = "descriptive",
             width = 5.5, height = 4.0)
 
 # =============================================================================
-# FIGURE 15: Sequence trajectories (Period 1 → 2, group means + individual lines)
+# FIGURE 15: Sequence trajectories (Period 1 Ã¢â€ â€™ 2, group means + individual lines)
 # =============================================================================
 log_h2("Figure 15: Sequence group trajectories")
 
@@ -738,7 +752,7 @@ fig16 <- ggplot2::ggplot(df_qq, ggplot2::aes(sample = .data$value)) +
 save_figure(fig16, "normality_qq_differences", subfolder = "supplementary")
 
 # =============================================================================
-# FIGURE 17: LME residual diagnostics (conditional — model must be present)
+# FIGURE 17: LME residual diagnostics (conditional Ã¢â‚¬â€ model must be present)
 # =============================================================================
 .lme_model <- results$mixed_models$full$model1 %||% results$mixed_models$model1
 
@@ -933,7 +947,7 @@ if (.run_ceil) {
 
 # =============================================================================
 # FIGURE 21: Period-specific intervention effect
-# Shows the within-person Int−Ctl difference split by WHEN the intervention
+# Shows the within-person IntÃ¢Ë†â€™Ctl difference split by WHEN the intervention
 # occurred (Period 1 vs Period 2). A significant difference between the two
 # boxplots means the effect size is moderated by period order.
 # =============================================================================
@@ -1053,7 +1067,7 @@ if ("subgroup4" %in% names(dat)) {
 
 # =============================================================================
 # FIGURE 23: Ceiling / floor by subgroup4
-# Same ceiling/floor plot as Figure 20, but split by 4 subgroups —
+# Same ceiling/floor plot as Figure 20, but split by 4 subgroups Ã¢â‚¬â€
 # lets you see whether the ceiling effect is driven by a specific subgroup.
 # =============================================================================
 log_h2("Figure 23: Ceiling/floor by 4 subgroups")
@@ -1112,7 +1126,7 @@ if (.run_ceil && "subgroup4" %in% names(dat)) {
 
 # =============================================================================
 # FIGURE 24: 4-subgroup delta dotplot
-# One lollipop per participant coloured by subgroup — shows whether
+# One lollipop per participant coloured by subgroup Ã¢â‚¬â€ shows whether
 # the distribution of Int-minus-Ctl differences clustering by subgroup.
 # =============================================================================
 log_h2("Figure 24: 4-subgroup delta dotplot")
@@ -1156,7 +1170,7 @@ if ("subgroup4" %in% names(dat)) {
 }
 
 # =============================================================================
-# FIGURE 25: 2×2 crossover interaction with condition labels on x-axis
+# FIGURE 25: 2Ãƒâ€”2 crossover interaction with condition labels on x-axis
 # Enhances Figure 12 with explicit condition labels showing WHAT was tested
 # in each period for each sequence group.
 # =============================================================================
@@ -1336,7 +1350,7 @@ if (!is.null(.raw_data_27)) {
     lbl_cols <- vapply(ordered_cols, make_lbl, character(1))
 
     # Compute correlation matrix for all items.
-    # Constant items produce NA correlations — handled explicitly below.
+    # Constant items produce NA correlations Ã¢â‚¬â€ handled explicitly below.
     all_mat <- as.matrix(dplyr::select(items_df, dplyr::all_of(ordered_cols)))
     storage.mode(all_mat) <- "numeric"
     cmat <- suppressWarnings(cor(all_mat, use = "pairwise.complete.obs"))
@@ -1350,7 +1364,7 @@ if (!is.null(.raw_data_27)) {
         value    = as.vector(cmat),
         on_diag  = .data$row == .data$col,
         # A cell is "constant" when at least one member item is constant
-        # (off-diagonal only — diagonal is always grey regardless).
+        # (off-diagonal only Ã¢â‚¬â€ diagonal is always grey regardless).
         is_const = !.data$on_diag &
                      (.data$row %in% const_cols | .data$col %in% const_cols),
         # Fill: NA makes tile grey (via na.value); numeric drives the colour scale.
@@ -1519,7 +1533,7 @@ if (!is.null(.raw_data_27)) {
   .resp_matrix <- function(items_df, cols_full, excl_cols, form_lbl,
                             excl_always = NULL) {
     # excl_always : (optional) subset of excl_cols excluded in ALL comparison
-    #   variants — these receive "**" axis markers.  Remaining excl_cols items
+    #   variants Ã¢â‚¬â€ these receive "**" axis markers.  Remaining excl_cols items
     #   receive "*".  When NULL (single-run mode) all excl_cols receive "*".
     #   Mirrors the two-level logic in .corr_heatmap().
     .num_ord <- suppressWarnings(as.numeric(sub("^[xy]", "", cols_full)))
@@ -1559,7 +1573,7 @@ if (!is.null(.raw_data_27)) {
     n_p    <- length(.part_ord)
     ytxt   <- max(5L, 9L - n_p %/% 4L)
 
-    # Caption — two-level when excl_always provided and both sets non-empty.
+    # Caption Ã¢â‚¬â€ two-level when excl_always provided and both sets non-empty.
     .cap28 <- if (.two28) {
       paste0("** excluded in both restricted variants\n",
              "*  excluded only in the stricter restricted variant")
@@ -1676,7 +1690,7 @@ if (!is.null(.raw_data_27)) {
   )
   has_excl29     <- length(.raw_data_27$x_excluded) > 0 ||
                     length(.raw_data_27$y_excluded) > 0
-  # Two-level caption for Figure 29 — combine X and Y exclusion contexts.
+  # Two-level caption for Figure 29 Ã¢â‚¬â€ combine X and Y exclusion contexts.
   .ea29_x <- if (!is.null(.excl_always_x_env)) .excl_always_x_env else character(0)
   .ea29_y <- if (!is.null(.excl_always_y_env)) .excl_always_y_env else character(0)
   .es29_x <- setdiff(.raw_data_27$x_excluded, .ea29_x)
@@ -1731,109 +1745,305 @@ if (!is.null(.raw_data_27)) {
 # =============================================================================
 # FIGURE S1: Participant flow diagram (CONSORT-style crossover design)
 # =============================================================================
+.fd <- cfg$flow_diagram %||% list()
+.flow_enabled <- isTRUE(.fd$generate %||% FALSE)
+
+if (!.flow_enabled) {
+  .s1_filename <- .fd$output_filename %||% "figure_s1_participant_flow.png"
+  .s1_path <- out_path(
+    Sys.getenv("FIGURES_ROOT_SUFFIX", unset = "figures"),
+    "supplementary", .s1_filename
+  )
+  if (file.exists(.s1_path)) {
+    unlink(.s1_path)
+    log_line("Figure S1 skipped: flow_diagram.generate is false; removed stale file.")
+  } else {
+    log_line("Figure S1 skipped: flow_diagram.generate is false.")
+  }
+} else {
 log_h2("Figure S1: Participant flow diagram")
 
 .n_s1     <- nrow(dat)
-.n_int_s1 <- sum(dat$intervention_period == 1L, na.rm = TRUE)   # intervention-first
-.n_ctl_s1 <- sum(dat$intervention_period == 2L, na.rm = TRUE)   # control-first
+.n_int_s1 <- sum(dat$intervention_period == 1L, na.rm = TRUE)
+.n_ctl_s1 <- sum(dat$intervention_period == 2L, na.rm = TRUE)
 
-.dot_s1 <- paste0(
-  'digraph crossover_flow {
-    graph [layout = dot, rankdir = TB, fontname = "Arial",
-           nodesep = 0.4, ranksep = 0.5]
-    node  [shape = box, style = "rounded,filled", fillcolor = white,
-           fontname = "Arial", fontsize = 14, margin = "0.15,0.10"]
-    edge  [arrowsize = 0.8]
+.s1_break_dur   <- .fd$break_duration          %||% "10-15 min"
+.s1_seq_ctl_lbl <- .fd$control_sequence_label  %||% "Control-first"
+.s1_seq_int_lbl <- .fd$ai_sequence_label       %||% "AI-first"
+.s1_p1_ctl_lbl  <- .fd$period1_control_label   %||% "No-AI study (20 min)"
+.s1_p1_int_lbl  <- .fd$period1_ai_label        %||% "AI-assisted study (20 min)"
+.s1_cond_ctl    <- .fd$control_short_label     %||% .s1_p1_ctl_lbl
+.s1_cond_int    <- .fd$ai_short_label          %||% .s1_p1_int_lbl
+.s1_p2_ctl_lbl  <- .fd$period2_control_label   %||% gsub(" \\(", "\n(", .s1_cond_ctl)
+.s1_p2_int_lbl  <- .fd$period2_ai_label        %||% gsub(" \\(", "\n(", .s1_cond_int)
+.s1_setup_label <- .fd$setup_label %||%
+  "Participants (n = {n}) completed lecture + AI guidance,\nthen were randomized to sequence order"
+.s1_setup_label <- gsub("\\{n\\}", .n_s1, .s1_setup_label)
+.s1_output_file <- .fd$output_filename %||% "figure_s1_participant_flow.png"
 
-    A  [label = "Participants (n=', .n_s1, ')"]
-    B  [label = "Randomized 1:1 to order"]
-    C  [label = "Lecture (60 min)"]
-    D  [label = "', int_label, ' guidance (5-10 min)"]
-    E  [label = "Break (10-15 min)"]
-    F1 [label = "', ctl_label, ' first (n=', .n_ctl_s1, ')"]
-    F2 [label = "', int_label, ' first (n=', .n_int_s1, ')"]
-    G1 [label = "', ctl_label, ' study (20 min)"]
-    G2 [label = "', int_label, ' study (20 min)"]
-    H1 [label = "Post-test 1 (X or Y)"]
-    H2 [label = "Post-test 1 (X or Y)"]
-    I1 [label = "Break (10-15 min)"]
-    I2 [label = "Break (10-15 min)"]
-    J1 [label = "', int_label, ' study (20 min)"]
-    J2 [label = "', ctl_label, ' study (20 min)"]
-    K1 [label = "Post-test 2 (alternate form)"]
-    K2 [label = "Post-test 2 (alternate form)"]
+.n_ctl_x_s1 <- sum(dat$intervention_period == 2L & dat$form_x_period == 1L, na.rm = TRUE)
+.n_ctl_y_s1 <- sum(dat$intervention_period == 2L & dat$form_y_period == 1L, na.rm = TRUE)
+.n_int_x_s1 <- sum(dat$intervention_period == 1L & dat$form_x_period == 1L, na.rm = TRUE)
+.n_int_y_s1 <- sum(dat$intervention_period == 1L & dat$form_y_period == 1L, na.rm = TRUE)
 
-    A -> B -> C -> D -> E
-    E -> F1
-    E -> F2
-    F1 -> G1 -> H1 -> I1 -> J1 -> K1
-    F2 -> G2 -> H2 -> I2 -> J2 -> K2
-  }'
-)
+local({
+  .colors <- .fd$colors %||% list()
+  .fonts  <- .fd$font_sizes %||% list()
 
-if (requireNamespace("DiagrammeR",  quietly = TRUE) &&
-    requireNamespace("htmlwidgets", quietly = TRUE)) {
+  cf_ctl <- .colors$control_fill   %||% "#FFF3E6"
+  cb_ctl <- .colors$control_border %||% "#D8893A"
+  tc_ctl <- .colors$control_text   %||% "#6B3A10"
+  cf_int <- .colors$ai_fill        %||% "#EAF7EF"
+  cb_int <- .colors$ai_border      %||% "#2E8B57"
+  tc_int <- .colors$ai_text        %||% "#174A2D"
+  cf_pt  <- .colors$posttest_fill  %||% "#EAF3FC"
+  cb_pt  <- .colors$posttest_border %||% "#3A70B8"
+  tc_pt  <- .colors$posttest_text  %||% "#17376D"
+  cf_pan <- .colors$panel_fill     %||% "#FAFAFA"
+  cb_pan <- .colors$panel_border   %||% "#D5D5D5"
+  cf_sub <- .colors$subgroup_fill  %||% "#FFFFFF"
+  cb_sub <- .colors$subgroup_border %||% "#B8B8B8"
+  tc_dk  <- .colors$dark_text      %||% "#242424"
+  sc     <- .colors$arrow          %||% "#AFAFAF"
 
-  .s1_widget <- tryCatch(
-    DiagrammeR::grViz(.dot_s1),
-    error = function(e) {
-      log_warn("Figure S1 grViz render failed: ", conditionMessage(e))
-      NULL
-    }
-  )
+  fs_setup   <- as.numeric(.fonts$setup   %||% 3.05)
+  fs_header  <- as.numeric(.fonts$header  %||% 2.90)
+  fs_sub     <- as.numeric(.fonts$subgroup %||% 2.25)
+  fs_cell    <- as.numeric(.fonts$cell    %||% 2.65)
+  fs_test    <- as.numeric(.fonts$posttest %||% 2.45)
+  fs_row     <- as.numeric(.fonts$row_label %||% 1.85)
+  show_rows  <- isTRUE(.fd$show_row_labels %||% FALSE)
 
-  if (!is.null(.s1_widget)) {
-    .s1_path <- out_path(
-      Sys.getenv("FIGURES_ROOT_SUFFIX", unset = "figures"),
-      "supplementary", "figure_s1_participant_flow.png"
+  c1 <- 0.95; c2 <- 2.25; c3 <- 4.75; c4 <- 6.05
+  cc <- mean(c(c1, c2)); ci <- mean(c(c3, c4)); ca <- 3.50
+  panel_hw <- 1.74
+  lane_hw  <- 0.52
+  setup_hw <- 2.70
+  hh_setup <- 0.34
+  hh_head  <- 0.26
+  hh_sub   <- 0.18
+  hh_cell  <- 0.22
+
+  y_setup <- 5.72
+  y_head  <- 4.86
+  y_sub   <- 4.10
+  y_pt1   <- 3.35
+  y_p2    <- 2.58
+  y_pt2   <- 1.82
+
+  bx <- function(xc, yc, hw, hh_v, fc, bc, lw = 0.45) {
+    data.frame(
+      id = NA_integer_,
+      xc = xc, yc = yc, hw = hw, hh_v = hh_v,
+      x1 = xc - hw, x2 = xc + hw,
+      y1 = yc - hh_v, y2 = yc + hh_v,
+      fc = fc, bc = bc, lw = lw, stringsAsFactors = FALSE
     )
-    dir.create(dirname(.s1_path), recursive = TRUE, showWarnings = FALSE)
+  }
 
-    .s1_saved <- tryCatch({
-      .tmp_html <- tempfile(fileext = ".html")
-      htmlwidgets::saveWidget(.s1_widget, .tmp_html, selfcontained = FALSE)
-      on.exit(unlink(.tmp_html), add = TRUE)
-      on.exit(unlink(sub("\\.html$", "_files", .tmp_html), recursive = TRUE), add = TRUE)
+  panels <- do.call(rbind, list(
+    bx(cc, 3.12, panel_hw, 2.02, cf_pan, cb_pan, 0.25),
+    bx(ci, 3.12, panel_hw, 2.02, cf_pan, cb_pan, 0.25)
+  ))
+  panels$id <- seq_len(nrow(panels))
 
-      if (requireNamespace("webshot2", quietly = TRUE)) {
-        webshot2::webshot(.tmp_html, file = .s1_path,
-                          vwidth = 700, vheight = 1050, zoom = 2, delay = 0.5)
-      } else if (requireNamespace("webshot", quietly = TRUE)) {
-        webshot::webshot(.tmp_html, file = .s1_path,
-                         vwidth = 700, vheight = 1050, zoom = 2, delay = 0.5)
-      } else {
-        stop("Neither webshot2 nor webshot is installed.")
-      }
-      TRUE
-    }, error = function(e) {
-      log_warn("Figure S1 PNG export failed: ", conditionMessage(e))
-      FALSE
-    })
+  boxes <- do.call(rbind, list(
+    bx(ca, y_setup, setup_hw, hh_setup, "#FFFFFF", "#3A3A3A", 0.55),
+    bx(cc, y_head,  panel_hw - 0.14, hh_head, cf_ctl, cb_ctl, 0.55),
+    bx(ci, y_head,  panel_hw - 0.14, hh_head, cf_int, cb_int, 0.55),
+    bx(c1, y_sub,   lane_hw, hh_sub, cf_sub, cb_sub, 0.25),
+    bx(c2, y_sub,   lane_hw, hh_sub, cf_sub, cb_sub, 0.25),
+    bx(c3, y_sub,   lane_hw, hh_sub, cf_sub, cb_sub, 0.25),
+    bx(c4, y_sub,   lane_hw, hh_sub, cf_sub, cb_sub, 0.25),
+    bx(c1, y_pt1,   lane_hw, hh_cell, cf_pt,  cb_pt,  0.45),
+    bx(c2, y_pt1,   lane_hw, hh_cell, cf_pt,  cb_pt,  0.45),
+    bx(c3, y_pt1,   lane_hw, hh_cell, cf_pt,  cb_pt,  0.45),
+    bx(c4, y_pt1,   lane_hw, hh_cell, cf_pt,  cb_pt,  0.45),
+    bx(c1, y_p2,    lane_hw, hh_cell, cf_int, cb_int, 0.45),
+    bx(c2, y_p2,    lane_hw, hh_cell, cf_int, cb_int, 0.45),
+    bx(c3, y_p2,    lane_hw, hh_cell, cf_ctl, cb_ctl, 0.45),
+    bx(c4, y_p2,    lane_hw, hh_cell, cf_ctl, cb_ctl, 0.45),
+    bx(c1, y_pt2,   lane_hw, hh_cell, cf_pt,  cb_pt,  0.45),
+    bx(c2, y_pt2,   lane_hw, hh_cell, cf_pt,  cb_pt,  0.45),
+    bx(c3, y_pt2,   lane_hw, hh_cell, cf_pt,  cb_pt,  0.45),
+    bx(c4, y_pt2,   lane_hw, hh_cell, cf_pt,  cb_pt,  0.45)
+  ))
+  boxes$id <- seq_len(nrow(boxes))
 
-    if (isTRUE(.s1_saved) && file.exists(.s1_path)) {
-      # Trim excess whitespace left by the browser viewport
-      if (requireNamespace("magick", quietly = TRUE)) {
-        tryCatch({
-          .img <- magick::image_read(.s1_path)
-          .img <- magick::image_trim(.img)
-          .img <- magick::image_border(.img, "white", "30x30")
-          magick::image_write(.img, .s1_path)
-        }, error = function(e) {
-          log_warn("Figure S1 trim step failed: ", conditionMessage(e))
-        })
-      }
-      sz_kb <- tryCatch(round(file.size(.s1_path) / 1024, 1), error = function(e) NA_real_)
-      log_line("Figure saved : figures/supplementary/figure_s1_participant_flow.png")
-      log_line("             : n=", .n_s1,
-               " | ", ctl_label, "-first n=", .n_ctl_s1,
-               " | ", int_label, "-first n=", .n_int_s1,
-               " | ", sz_kb, " KB")
+  poly_from_boxes <- function(df) {
+    do.call(rbind, lapply(seq_len(nrow(df)), function(i) {
+      r <- df[i, ]
+      data.frame(
+        id = r$id,
+        x = c(r$x1, r$x2, r$x2, r$x1),
+        y = c(r$y1, r$y1, r$y2, r$y2),
+        fc = r$fc, bc = r$bc, lw = r$lw,
+        stringsAsFactors = FALSE
+      )
+    }))
+  }
+
+  panels_poly <- poly_from_boxes(panels)
+  boxes_poly  <- poly_from_boxes(boxes)
+
+  lb <- function(x, y, txt, col = tc_dk, sz = 2.70, ff = "plain") {
+    data.frame(x = x, y = y, label = txt, col = col, sz = sz, ff = ff,
+               stringsAsFactors = FALSE)
+  }
+
+  labels <- do.call(rbind, list(
+    lb(ca, y_setup, .s1_setup_label, "#111111", fs_setup, "bold"),
+    lb(cc, y_head, paste0(.s1_seq_ctl_lbl, " (n = ", .n_ctl_s1, ")\n", .s1_p1_ctl_lbl),
+       tc_ctl, fs_header, "bold"),
+    lb(ci, y_head, paste0(.s1_seq_int_lbl, " (n = ", .n_int_s1, ")\n", .s1_p1_int_lbl),
+       tc_int, fs_header, "bold"),
+    lb(c1, y_sub, paste0("Subgroup 1 (n = ", .n_ctl_x_s1, ")\nForm X first"),
+       tc_dk, fs_sub),
+    lb(c2, y_sub, paste0("Subgroup 2 (n = ", .n_ctl_y_s1, ")\nForm Y first"),
+       tc_dk, fs_sub),
+    lb(c3, y_sub, paste0("Subgroup 3 (n = ", .n_int_x_s1, ")\nForm X first"),
+       tc_dk, fs_sub),
+    lb(c4, y_sub, paste0("Subgroup 4 (n = ", .n_int_y_s1, ")\nForm Y first"),
+       tc_dk, fs_sub),
+    lb(c1, y_pt1, paste0("PT1: ", form_x_lbl), tc_pt, fs_test),
+    lb(c2, y_pt1, paste0("PT1: ", form_y_lbl), tc_pt, fs_test),
+    lb(c3, y_pt1, paste0("PT1: ", form_x_lbl), tc_pt, fs_test),
+    lb(c4, y_pt1, paste0("PT1: ", form_y_lbl), tc_pt, fs_test),
+    lb(c1, y_p2, .s1_p2_int_lbl, tc_int, fs_cell, "bold"),
+    lb(c2, y_p2, .s1_p2_int_lbl, tc_int, fs_cell, "bold"),
+    lb(c3, y_p2, .s1_p2_ctl_lbl, tc_ctl, fs_cell, "bold"),
+    lb(c4, y_p2, .s1_p2_ctl_lbl, tc_ctl, fs_cell, "bold"),
+    lb(c1, y_pt2, paste0("PT2: ", form_y_lbl), tc_pt, fs_test),
+    lb(c2, y_pt2, paste0("PT2: ", form_x_lbl), tc_pt, fs_test),
+    lb(c3, y_pt2, paste0("PT2: ", form_y_lbl), tc_pt, fs_test),
+    lb(c4, y_pt2, paste0("PT2: ", form_x_lbl), tc_pt, fs_test)
+  ))
+  if (show_rows) {
+    row_labels <- do.call(rbind, list(
+      lb(cc - panel_hw + 0.22, y_pt1, "Post-test\n1", "#777777", fs_row),
+      lb(cc - panel_hw + 0.22, y_p2, "Period 2\nstudy", "#777777", fs_row),
+      lb(cc - panel_hw + 0.22, y_pt2, "Post-test\n2", "#777777", fs_row),
+      lb(ci - panel_hw + 0.22, y_pt1, "Post-test\n1", "#777777", fs_row),
+      lb(ci - panel_hw + 0.22, y_p2, "Period 2\nstudy", "#777777", fs_row),
+      lb(ci - panel_hw + 0.22, y_pt2, "Post-test\n2", "#777777", fs_row)
+    ))
+    row_labels$ff <- "plain"
+    labels <- rbind(labels, row_labels)
+  }
+
+  sg <- function(x, y, xe, ye, arr = FALSE) {
+    data.frame(x = x, y = y, xe = xe, ye = ye, arr = arr,
+               stringsAsFactors = FALSE)
+  }
+
+  split_y <- 5.26
+  segments <- rbind(
+    sg(ca, y_setup - hh_setup, ca, split_y),
+    sg(cc, split_y, ci, split_y),
+    sg(cc, split_y, cc, y_head + hh_head),
+    sg(ci, split_y, ci, y_head + hh_head)
+  )
+  split_sub_y <- (y_head + y_sub) / 2
+  for (arm in list(list(mid = cc, cols = c(c1, c2)), list(mid = ci, cols = c(c3, c4)))) {
+    segments <- rbind(segments,
+      sg(arm$mid, y_head - hh_head, arm$mid, split_sub_y),
+      sg(arm$mid, split_sub_y, arm$cols[1], split_sub_y),
+      sg(arm$mid, split_sub_y, arm$cols[2], split_sub_y),
+      sg(arm$cols[1], split_sub_y, arm$cols[1], y_sub + hh_sub, TRUE),
+      sg(arm$cols[2], split_sub_y, arm$cols[2], y_sub + hh_sub, TRUE)
+    )
+  }
+  for (lane in c(c1, c2, c3, c4)) {
+    segments <- rbind(segments,
+      sg(lane, y_sub - hh_sub, lane, y_pt1 + hh_cell, TRUE),
+      sg(lane, y_pt1 - hh_cell, lane, y_p2 + hh_cell, TRUE),
+      sg(lane, y_p2 - hh_cell, lane, y_pt2 + hh_cell, TRUE)
+    )
+  }
+  segments_ln  <- segments[!segments$arr, ]
+  segments_arr <- segments[ segments$arr, ]
+  arr_end <- ggplot2::arrow(length = grid::unit(4, "pt"), type = "open")
+
+  use_ggforce <- requireNamespace("ggforce", quietly = TRUE)
+  p <- ggplot2::ggplot()
+
+  if (use_ggforce) {
+    p <- p +
+      ggforce::geom_shape(
+        data = panels_poly,
+        ggplot2::aes(x = x, y = y, group = id,
+                     fill = fc, colour = bc, linewidth = lw),
+        radius = grid::unit(6, "pt"), expand = grid::unit(0, "pt")) +
+      ggforce::geom_shape(
+        data = boxes_poly,
+        ggplot2::aes(x = x, y = y, group = id,
+                     fill = fc, colour = bc, linewidth = lw),
+        radius = grid::unit(5, "pt"), expand = grid::unit(0, "pt"))
+  } else {
+    p <- p +
+      ggplot2::geom_rect(
+        data = panels,
+        ggplot2::aes(xmin = x1, xmax = x2, ymin = y1, ymax = y2,
+                     fill = fc, colour = bc, linewidth = lw)) +
+      ggplot2::geom_rect(
+        data = boxes,
+        ggplot2::aes(xmin = x1, xmax = x2, ymin = y1, ymax = y2,
+                     fill = fc, colour = bc, linewidth = lw))
+  }
+
+  p <- p +
+    ggplot2::scale_fill_identity() +
+    ggplot2::scale_colour_identity() +
+    ggplot2::scale_linewidth_identity() +
+    ggplot2::geom_segment(
+      data = segments_ln,
+      ggplot2::aes(x = x, xend = xe, y = y, yend = ye),
+      colour = sc, linewidth = 0.26) +
+    ggplot2::geom_segment(
+      data = segments_arr,
+      ggplot2::aes(x = x, xend = xe, y = y, yend = ye),
+      colour = sc, linewidth = 0.26, arrow = arr_end)
+
+  for (ff_val in c("plain", "bold")) {
+    sub_labels <- labels[labels$ff == ff_val, ]
+    if (nrow(sub_labels) > 0L) {
+      p <- p + ggplot2::geom_text(
+        data = sub_labels,
+        ggplot2::aes(x = x, y = y, label = label, colour = col, size = sz),
+        hjust = 0.5, vjust = 0.5, lineheight = 0.86, fontface = ff_val)
     }
   }
 
-} else {
-  log_warn("Figure S1 skipped: DiagrammeR and/or htmlwidgets not installed.")
-  log_warn("         Install via: install.packages(c('DiagrammeR', 'htmlwidgets'))")
+  p <- p +
+    ggplot2::scale_size_identity() +
+    ggplot2::coord_cartesian(xlim = c(-0.20, 7.00),
+                             ylim = c(1.10, 6.22), clip = "off") +
+    ggplot2::theme_void() +
+    ggplot2::theme(plot.margin = ggplot2::margin(4, 6, 4, 6))
+
+  .s1_path <- out_path(
+    Sys.getenv("FIGURES_ROOT_SUFFIX", unset = "figures"),
+    "supplementary", .s1_output_file
+  )
+  dir.create(dirname(.s1_path), recursive = TRUE, showWarnings = FALSE)
+  tryCatch({
+    ggplot2::ggsave(
+      .s1_path, plot = p,
+      width  = as.numeric(.fd$width_in  %||% 7.5),
+      height = as.numeric(.fd$height_in %||% 5.0),
+      dpi    = as.integer(.fd$dpi %||% cfg_get("figures", "dpi", default = 300)),
+      device = "png", bg = "white")
+    sz_kb <- round(file.size(.s1_path) / 1024, 1)
+    log_line("Figure saved : figures/supplementary/", .s1_output_file)
+    log_line("             : n=", .n_s1,
+             " | ", .s1_seq_ctl_lbl, " n=", .n_ctl_s1,
+             " | ", .s1_seq_int_lbl, " n=", .n_int_s1,
+             " | break timing omitted from figure (", .s1_break_dur, ")",
+             " | ", sz_kb, " KB")
+  }, error = function(e) {
+    log_warn("Figure S1 ggsave failed: ", conditionMessage(e))
+  })
+})
 }
 
 log_h2("FIGURES COMPLETE")

@@ -34,6 +34,8 @@ y_excluded        <- raw_data$y_excluded
 
 dat             <- load_rds("analysis_data")
 scale_to        <- as.numeric(cfg$scores$scale_to %||% 10)
+score_meta      <- tryCatch(load_rds("score_metadata"), error = function(e) NULL)
+score_label     <- score_metric_label(score_meta, scale_to)
 int_label       <- cfg$study$intervention_label %||% "Intervention"
 ctl_label       <- cfg$study$control_label      %||% "Control"
 form_x_label    <- cfg$study$form_x_label       %||% "Form X"
@@ -479,7 +481,7 @@ score_stratified_item_analysis <- function(items_df, item_cols,
   })
 }
 
-# Compute combined (global) total score: X raw total + Y raw total, matched by
+# Compute combined (global) item-count score, matched by
 # participant.  Using a global score means both form panels share the same
 # strata — T2 in the Form X facet and T2 in the Form Y facet are the same
 # participants — which is the only meaningful basis for cross-form comparison.
@@ -866,7 +868,11 @@ fig_score_dist <- score_dist_data |>
                           fill = "steelblue", colour = "white",
                           linewidth = 0.3, boundary = 0) +
   ggplot2::scale_x_continuous(
-    name   = cfg_get("figures","y_axis_score_label", default = "Score (0-10)"),
+    name   = if (isTRUE(score_meta$any_unequal_denominators)) {
+      score_label
+    } else {
+      cfg_get("figures", "y_axis_score_label", default = score_label)
+    },
     limits = c(0, scale_to)
   ) +
   ggplot2::scale_y_continuous(
@@ -933,7 +939,7 @@ if (!is.null(strat_all) && nrow(strat_all) > 0) {
                "Item difficulty (proportion correct) by ", tolower(.strat_type_label), " ",
                "(", strata_labels[1], "=lowest, ",
                strata_labels[length(strata_labels)], "=highest; ",
-               "strata based on combined raw score across both forms — same participants in each stratum across both facets). ",
+               "strata based on combined item-count score across both forms — same participants in each stratum across both facets). ",
                "Red flags: inverted or flat gradients indicate poor discrimination."))
 }
 
@@ -1009,7 +1015,7 @@ if (!is.null(strat_all) && nrow(strat_all) > 0) {
   .strat_high_label <- strata_labels[length(strata_labels)]
   .strat_xlab <- paste0(
     .strat_type_label,
-    " (combined raw score, both forms; ",
+    " (combined item-count score, both forms; ",
     .strat_low_label, " = lowest, ", .strat_high_label, " = highest; n per stratum in parentheses)"
   )
 

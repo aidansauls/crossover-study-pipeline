@@ -22,12 +22,22 @@ cfg     <- read_config()
 dat     <- load_rds("analysis_data")
 results <- load_rds("analysis_results")
 psych   <- load_rds("psychometrics")
+score_meta <- results$score_metadata %||%
+  tryCatch(load_rds("score_metadata"), error = function(e) NULL)
 
 int_label  <- cfg$study$intervention_label %||% "Intervention"
 ctl_label  <- cfg$study$control_label      %||% "Control"
 form_x_lbl <- cfg$study$form_x_label       %||% "Form X"
 form_y_lbl <- cfg$study$form_y_label       %||% "Form Y"
 scale_to   <- as.numeric(cfg$scores$scale_to %||% 10)
+score_label <- results$score_label %||% score_metric_label(score_meta, scale_to)
+score_note  <- score_metric_note(score_meta)
+.score_phrase <- tolower(score_label)
+.score_caption <- function(txt) {
+  paste(c(txt, score_note), collapse = " ")
+}
+validate_score_columns(grep("_score_(full|restricted)$", names(dat), value = TRUE),
+                       score_meta, "tables")
 
 # =============================================================================
 # TABLE 1: Participant Flow & Sequence Allocation
@@ -62,16 +72,16 @@ save_table(tbl1, "01_participant_flow", subfolder = "descriptive",
 log_h2("Table 2: Descriptive statistics")
 
 desc_labels <- c(
-  intervention_score_full       = paste0(int_label, " score (full)"),
-  control_score_full            = paste0(ctl_label, " score (full)"),
-  period1_score_full            = "Period 1 score (full)",
-  period2_score_full            = "Period 2 score (full)",
-  x_score_full                  = paste0(form_x_lbl, " score (full)"),
-  y_score_full                  = paste0(form_y_lbl, " score (full)"),
-  intervention_score_restricted = paste0(int_label, " score (restricted)"),
-  control_score_restricted      = paste0(ctl_label, " score (restricted)"),
-  period1_score_restricted      = "Period 1 score (restricted)",
-  period2_score_restricted      = "Period 2 score (restricted)"
+  intervention_score_full       = paste0(int_label, " ", .score_phrase, " (full)"),
+  control_score_full            = paste0(ctl_label, " ", .score_phrase, " (full)"),
+  period1_score_full            = paste0("Period 1 ", .score_phrase, " (full)"),
+  period2_score_full            = paste0("Period 2 ", .score_phrase, " (full)"),
+  x_score_full                  = paste0(form_x_lbl, " ", .score_phrase, " (full)"),
+  y_score_full                  = paste0(form_y_lbl, " ", .score_phrase, " (full)"),
+  intervention_score_restricted = paste0(int_label, " ", .score_phrase, " (restricted)"),
+  control_score_restricted      = paste0(ctl_label, " ", .score_phrase, " (restricted)"),
+  period1_score_restricted      = paste0("Period 1 ", .score_phrase, " (restricted)"),
+  period2_score_restricted      = paste0("Period 2 ", .score_phrase, " (restricted)")
 )
 
 tbl2 <- results$descriptives |>
@@ -89,7 +99,8 @@ tbl2 <- results$descriptives |>
                 `Ceiling %`, `Floor %`)
 
 save_table(tbl2, "02_descriptive_statistics", subfolder = "descriptive",
-           caption = "Descriptive statistics by condition and period")
+           caption = .score_caption("Descriptive statistics by condition and period"),
+           notes = score_note)
 
 # =============================================================================
 # TABLE 3: Primary Contrasts (intervention vs control + period effects)
@@ -124,7 +135,8 @@ tbl3_rows <- list(
 tbl3 <- dplyr::bind_rows(tbl3_rows[!sapply(tbl3_rows, is.null)])
 
 save_table(tbl3, "03_primary_contrasts", subfolder = "primary",
-           caption = "Paired contrasts: intervention effect and period effect")
+           caption = .score_caption("Paired contrasts: intervention effect and period effect"),
+           notes = score_note)
 
 # =============================================================================
 # TABLE 00: OVERALL RESULTS  (primary manuscript table)
@@ -173,7 +185,8 @@ if (!is.null(.t00_mm)) {
   "Primary outcomes from the restricted primary analysis (", .restr_label, "). ",
   "Mean Diff = Group A \u2212 Group B using paired within-participant comparisons. ",
   "MM Est (SE) = linear mixed-model fixed-effect estimate (SE), with sequence included ",
-  "as a covariate and participant as a random intercept."
+  "as a covariate and participant as a random intercept. ",
+  score_note %||% ""
 )
 
 .tbl0_rows <- list()
@@ -222,6 +235,7 @@ if (!is.null(tbl0) && nrow(tbl0) > 0) {
   # PNG: single gt table with manuscript title (overrides save_table() PNG).
   if (requireNamespace("gt", quietly = TRUE) && !isFALSE(cfg$tables$export_png)) {
     tryCatch({
+      ensure_gt_png_export()
       gt::gtsave(
         gt::gt(tbl0) |>
           gt::tab_header(
@@ -346,7 +360,8 @@ tbl4_carry <- dplyr::bind_rows(
 )
 
 save_table(tbl4_carry, "04a_carryover_test", subfolder = "period_effects",
-           caption = "Grizzle carryover test: Period-1 scores by sequence group")
+           caption = .score_caption("Grizzle carryover test: Period-1 scores by sequence group"),
+           notes = score_note)
 
 tbl4_seq <- dplyr::bind_rows(
   format_seq_period(results$seq_period_full,  "Sequence x Period interaction (full)"),
@@ -354,7 +369,8 @@ tbl4_seq <- dplyr::bind_rows(
 )
 
 save_table(tbl4_seq, "04b_sequence_period_interaction", subfolder = "period_effects",
-           caption = "Sequence x period interaction: Period 2 - Period 1 by sequence")
+           caption = .score_caption("Sequence x period interaction: Period 2 - Period 1 by sequence"),
+           notes = score_note)
 
 # =============================================================================
 # TABLE 5: Item Analysis
@@ -529,7 +545,8 @@ tbl9_margins <- dat |>
 tbl9 <- dplyr::bind_rows(tbl9, tbl9_margins)
 
 save_table(tbl9, "09_period_condition_cell_means", subfolder = "descriptive",
-           caption = "Cell means (M, SD, Median) by period and sequence group")
+           caption = .score_caption("Cell means (M, SD, Median) by period and sequence group"),
+           notes = score_note)
 
 # =============================================================================
 # TABLE 10: Normality tests (Shapiro-Wilk) — conditional on config flag
@@ -975,7 +992,7 @@ if (!is.null(.psych_rds) &&
 
   .flag_notes18 <- c(
     paste0('"# Flags": count of psychometric suspicion criteria triggered for this item (see Table 17 for detail).'),
-    paste0("Strata are based on each participant's combined raw score across both forms (X + Y), so the same participants appear in each stratum in both the Form X and Form Y sections."),
+    paste0("Strata are based on each participant's combined item-count score across both forms (X + Y), so the same participants appear in each stratum in both the Form X and Form Y sections."),
     paste0("Strata are labelled T1\u2013T3 (tertiles; default) or Q1\u2013Q4 (quartiles) depending on study_config.yml ability_strata setting."),
     paste0("First stratum = lowest overall ability, last stratum = highest overall ability."),
     paste0("A well-functioning item shows P(correct) increasing monotonically across strata."),

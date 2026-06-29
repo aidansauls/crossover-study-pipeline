@@ -156,6 +156,21 @@ read_config <- function() {
     item_exclusions = list(x = list(), y = list()),
     scores = list(scale_to = 10),
     analysis = list(alpha = 0.05, ci_level = 0.95, min_n_carryover = 4),
+    power_analysis = list(
+      target_power = 0.80,
+      target_effects_pct = c(5, 8, 10, 12, 15, 20),
+      max_n = NULL
+    ),
+    display_labels = list(
+      condition_control = "No-AI",
+      condition_ai = "AI-assisted",
+      condition_control_short = "No-AI",
+      condition_ai_short = "AI-assisted",
+      condition_control_session = "No-AI study",
+      condition_ai_session = "AI-assisted study",
+      sequence_control_first = "No-AI first",
+      sequence_ai_first = "AI-assisted first"
+    ),
     figures = list(
       dpi = 300, width_in = 7.5, height_in = 5.0,
       include_titles = FALSE, base_font_size = 12, font_family = "sans",
@@ -203,6 +218,56 @@ cfg_get <- function(..., default = NULL) {
     error = function(e) NULL
   )
   if (is.null(val)) default else val
+}
+
+condition_display_map <- function(cfg = read_config()) {
+  int_label <- cfg$study$intervention_label %||% "Intervention"
+  ctl_label <- cfg$study$control_label      %||% "Control"
+  labels    <- cfg$display_labels %||% list()
+
+  c(
+    stats::setNames(
+      labels$condition_control %||% labels$condition_control_short %||% ctl_label,
+      ctl_label
+    ),
+    stats::setNames(
+      labels$condition_ai %||% labels$condition_ai_short %||% int_label,
+      int_label
+    )
+  )
+}
+
+condition_display_label <- function(x, cfg = read_config()) {
+  x_chr <- as.character(x)
+  map <- condition_display_map(cfg)
+  out <- unname(map[x_chr])
+  out[is.na(out)] <- x_chr[is.na(out)]
+  out
+}
+
+sequence_display_map <- function(cfg = read_config()) {
+  int_label <- cfg$study$intervention_label %||% "Intervention"
+  ctl_label <- cfg$study$control_label      %||% "Control"
+  labels    <- cfg$display_labels %||% list()
+
+  c(
+    stats::setNames(
+      labels$sequence_control_first %||% paste0(ctl_label, " first"),
+      paste0(ctl_label, "-first")
+    ),
+    stats::setNames(
+      labels$sequence_ai_first %||% paste0(int_label, " first"),
+      paste0(int_label, "-first")
+    )
+  )
+}
+
+sequence_display_label <- function(x, cfg = read_config()) {
+  x_chr <- as.character(x)
+  map <- sequence_display_map(cfg)
+  out <- unname(map[x_chr])
+  out[is.na(out)] <- x_chr[is.na(out)]
+  out
 }
 
 # =============================================================================
@@ -732,7 +797,7 @@ save_figure <- function(plot, name, subfolder = "supplementary",
 ensure_gt_png_export <- function() {
   if (!requireNamespace("chromote", quietly = TRUE)) return(invisible(FALSE))
 
-  cache_dir <- file.path(proj_root, ".r-cache")
+  cache_dir <- file.path(PROJ_ROOT, ".r-cache")
   dir.create(cache_dir, recursive = TRUE, showWarnings = FALSE)
   if (!nzchar(Sys.getenv("R_USER_CACHE_DIR", unset = ""))) {
     Sys.setenv(R_USER_CACHE_DIR = cache_dir)
@@ -765,6 +830,31 @@ ensure_gt_png_export <- function() {
   invisible(TRUE)
 }
 
+save_table_png_fallback <- function(df, png_path, caption = NULL, notes = NULL) {
+  lines <- c(
+    if (!is.null(caption) && nzchar(caption)) caption else character(0),
+    if (!is.null(caption) && nzchar(caption)) "" else character(0),
+    utils::capture.output(print(df, row.names = FALSE, right = FALSE)),
+    if (!is.null(notes) && length(notes) > 0) c("", "Notes:", paste0("- ", notes)) else character(0)
+  )
+  lines <- ifelse(nchar(lines) == 0, " ", lines)
+  max_chars <- max(nchar(lines), na.rm = TRUE)
+  width_px  <- max(900L, min(5000L, as.integer(max_chars * 8.5 + 80)))
+  height_px <- max(500L, min(12000L, as.integer(length(lines) * 22 + 80)))
+
+  grDevices::png(png_path, width = width_px, height = height_px, res = 150)
+  on.exit(grDevices::dev.off(), add = TRUE)
+  grid::grid.newpage()
+  grid::grid.text(
+    paste(lines, collapse = "\n"),
+    x = grid::unit(0.03, "npc"),
+    y = grid::unit(0.97, "npc"),
+    just = c("left", "top"),
+    gp = grid::gpar(fontfamily = "mono", fontsize = 8.5, col = "grey15")
+  )
+  invisible(png_path)
+}
+
 #' Save a data frame as CSV and optionally PNG (via gt)
 #' @param df        data frame
 #' @param name      base file name
@@ -794,42 +884,62 @@ save_table <- function(df, name, subfolder = "supplementary",
   log_line("            : columns: ", paste(names(df_out), collapse = ", "))
   if (!is.null(notes)) log_line("            : ", length(notes), " note line(s) appended")
   
-  # ---- PNG via gt ----
+  # ---- PNG via gt, with grid fallback ----
   # Defaults to TRUE when cfg$tables$export_png is unset; set to false to disable.
-  if (!isFALSE(cfg$tables$export_png) && requireNamespace("gt", quietly = TRUE)) {
+  if (!isFALSE(cfg$tables$export_png)) {
     png_path <- out_path("tables_png", subfolder, paste0(name, ".png"))
-    
-    gt_tbl <- gt::gt(df_out)
-    
-    if (!is.null(caption) && isTRUE(cfg$tables$include_titles)) {
-      gt_tbl <- gt_tbl |> gt::tab_header(title = caption)
-    }
-    
-    gt_tbl <- gt_tbl |>
-      gt::tab_options(
-        table.font.size        = 11,
-        column_labels.font.weight = "bold",
-        table.border.top.color      = "grey30",
-        table.border.bottom.color   = "grey30",
-        column_labels.border.bottom.color = "grey50",
-        data_row.padding = gt::px(4)
-      ) |>
-      gt::opt_table_lines("none") |>
-      gt::opt_row_striping()
-    
-    if (!is.null(notes) && length(notes) > 0) {
-      for (.note in notes) {
-        gt_tbl <- gt_tbl |> gt::tab_source_note(gt::md(.note))
+    .png_ok <- FALSE
+
+    if (requireNamespace("gt", quietly = TRUE)) {
+      gt_tbl <- gt::gt(df_out)
+
+      if (!is.null(caption) && isTRUE(cfg$tables$include_titles)) {
+        gt_tbl <- gt_tbl |> gt::tab_header(title = caption)
       }
+
+      gt_tbl <- gt_tbl |>
+        gt::tab_options(
+          table.font.size        = 11,
+          column_labels.font.weight = "bold",
+          table.border.top.color      = "grey30",
+          table.border.bottom.color   = "grey30",
+          column_labels.border.bottom.color = "grey50",
+          data_row.padding = gt::px(4)
+        ) |>
+        gt::opt_table_lines("none") |>
+        gt::opt_row_striping()
+
+      if (!is.null(notes) && length(notes) > 0) {
+        for (.note in notes) {
+          gt_tbl <- gt_tbl |> gt::tab_source_note(gt::md(.note))
+        }
+      }
+
+      .png_ok <- tryCatch({
+        ensure_gt_png_export()
+        gt::gtsave(gt_tbl, png_path)
+        TRUE
+      }, error = function(e) {
+        log_warn("gt PNG export failed for '", name, "': ", conditionMessage(e))
+        FALSE
+      })
     }
-    
-    tryCatch({
-      ensure_gt_png_export()
-      gt::gtsave(gt_tbl, png_path)
+
+    if (!.png_ok) {
+      tryCatch({
+        save_table_png_fallback(df_out, png_path, caption = caption, notes = notes)
+        .png_ok <- TRUE
+        log_warn("Used fallback PNG table renderer for '", name, "'.")
+      }, error = function(e) {
+        log_warn("Fallback PNG export failed for '", name, "': ", conditionMessage(e))
+      })
+    }
+
+    if (.png_ok) {
       log_line("Table PNG   : tables_png/", subfolder, "/", basename(png_path))
-    }, error = function(e) {
-      log_warn("gt PNG export failed for '", name, "': ", conditionMessage(e))
-    })
+    } else {
+      log_warn("Table PNG not created for '", name, "'.")
+    }
   }
   
   invisible(csv_path)

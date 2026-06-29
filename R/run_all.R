@@ -23,8 +23,9 @@ if (trimws(tolower(.modules_raw)) == "list") {
   cat("  figures         05_figures.R              (opt-in)\n")
   cat("  tables          06_tables.R               (opt-in)\n")
   cat("  demographics    07_demographics.R         (opt-in; also needs demographics.generate: true in config)\n")
+  cat("  manuscript      10_manuscript_selected.R  (post-audit manuscript-selected assembly)\n")
   cat("\nSet ANALYSIS_MODULES=all to run everything, or comma-separate IDs, e.g.:\n")
-  cat("  ANALYSIS_MODULES=psychometrics,analyses,figures,tables\n")
+  cat("  ANALYSIS_MODULES=psychometrics,analyses,figures,tables,manuscript\n")
   cat("\nSet REUSE_DATA=1 to skip import+scores when RDS files already exist.\n")
   quit(save = "no", status = 0)
 }
@@ -190,9 +191,11 @@ cat(strrep("=", 72), "\n")
 cat("  PIPELINE SUMMARY\n")
 cat(strrep("=", 72), "\n\n")
 
-n_ok    <- sum(startsWith(unlist(.pipeline_results), "OK"))
-n_err   <- sum(startsWith(unlist(.pipeline_results), "ERROR"))
-n_skip  <- sum(unlist(.pipeline_results) == "SKIPPED")
+.status_vec <- unlist(.pipeline_results, use.names = FALSE)
+if (is.null(.status_vec)) .status_vec <- character(0)
+n_ok    <- sum(startsWith(.status_vec, "OK"))
+n_err   <- sum(startsWith(.status_vec, "ERROR"))
+n_skip  <- sum(.status_vec == "SKIPPED")
 
 for (nm in names(.pipeline_results)) {
   status <- .pipeline_results[[nm]]
@@ -242,5 +245,31 @@ if (exists("write_session_summary_txt", envir = .GlobalEnv)) {
                cat("[WARN] Audit script failed:", conditionMessage(e), "\n"))
 }
 
+.manuscript_err <- NULL
+.run_manuscript <- run_all_modules || "manuscript" %in% modules_env
+if (.run_manuscript) {
+  .manuscript_path <- R_script("10_manuscript_selected.R")
+  cat(strrep("-", 72), "\n")
+  cat("RUNNING: ", "10_manuscript_selected.R", "\n")
+  cat(strrep("-", 72), "\n")
+  if (file.exists(.manuscript_path)) {
+    tryCatch(
+      source(.manuscript_path, echo = FALSE),
+      error = function(e) {
+        .manuscript_err <<- e
+        cat("[ERROR] Manuscript-selected assembly failed:",
+            conditionMessage(e), "\n")
+        if (exists("session_record_error", envir = .GlobalEnv))
+          session_record_error(paste0("10_manuscript_selected.R: ",
+                                      conditionMessage(e)))
+      }
+    )
+  } else {
+    .manuscript_err <- simpleError(paste("Script not found:", .manuscript_path))
+    cat("[ERROR] Script not found:", .manuscript_path, "\n")
+  }
+}
+
 # Exit with error code if any step failed
+if (!is.null(.manuscript_err)) quit(status = 1, save = "no")
 if (n_err > 0) quit(status = 1, save = "no")

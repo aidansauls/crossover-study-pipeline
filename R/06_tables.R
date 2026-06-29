@@ -27,6 +27,10 @@ score_meta <- results$score_metadata %||%
 
 int_label  <- cfg$study$intervention_label %||% "Intervention"
 ctl_label  <- cfg$study$control_label      %||% "Control"
+int_display <- condition_display_label(int_label, cfg)
+ctl_display <- condition_display_label(ctl_label, cfg)
+seq_ai_display  <- sequence_display_label(paste0(int_label, "-first"), cfg)
+seq_ctl_display <- sequence_display_label(paste0(ctl_label, "-first"), cfg)
 form_x_lbl <- cfg$study$form_x_label       %||% "Form X"
 form_y_lbl <- cfg$study$form_y_label       %||% "Form Y"
 scale_to   <- as.numeric(cfg$scores$scale_to %||% 10)
@@ -35,6 +39,25 @@ score_note  <- score_metric_note(score_meta)
 .score_phrase <- tolower(score_label)
 .score_caption <- function(txt) {
   paste(c(txt, score_note), collapse = " ")
+}
+.display_subgroup_label <- function(x) {
+  x <- as.character(x)
+  x <- gsub(paste0(int_label, "-first"), seq_ai_display, x, fixed = TRUE)
+  x <- gsub(paste0(ctl_label, "-first"), seq_ctl_display, x, fixed = TRUE)
+  x
+}
+.display_model_term <- function(x) {
+  x <- as.character(x)
+  x <- ifelse(x == paste0("condition_fac", int_label),
+              paste0(int_display, " vs ", ctl_display), x)
+  x <- ifelse(x == paste0("condition_fac", ctl_label),
+              paste0(ctl_display, " vs ", int_display), x)
+  x <- ifelse(x == "period_facPeriod 2", "Period 2 vs Period 1", x)
+  x <- ifelse(x == paste0("sequence_fac", int_label, "-first"),
+              paste0(seq_ai_display, " vs ", seq_ctl_display), x)
+  x <- ifelse(x == paste0("sequence_fac", ctl_label, "-first"),
+              paste0(seq_ctl_display, " vs ", seq_ai_display), x)
+  x
 }
 validate_score_columns(grep("_score_(full|restricted)$", names(dat), value = TRUE),
                        score_meta, "tables")
@@ -47,8 +70,8 @@ log_h2("Table 1: Participant flow")
 tbl1 <- tibble::tibble(
   Item  = c(
     "Total enrolled",
-    paste0(int_label, "-first (sequence AB)"),
-    paste0(ctl_label, "-first (sequence BA)")
+    paste0(int_display, " first (sequence AB)"),
+    paste0(ctl_display, " first (sequence BA)")
   ),
   n = c(
     results$n,
@@ -72,14 +95,14 @@ save_table(tbl1, "01_participant_flow", subfolder = "descriptive",
 log_h2("Table 2: Descriptive statistics")
 
 desc_labels <- c(
-  intervention_score_full       = paste0(int_label, " ", .score_phrase, " (full)"),
-  control_score_full            = paste0(ctl_label, " ", .score_phrase, " (full)"),
+  intervention_score_full       = paste0(int_display, " ", .score_phrase, " (full)"),
+  control_score_full            = paste0(ctl_display, " ", .score_phrase, " (full)"),
   period1_score_full            = paste0("Period 1 ", .score_phrase, " (full)"),
   period2_score_full            = paste0("Period 2 ", .score_phrase, " (full)"),
   x_score_full                  = paste0(form_x_lbl, " ", .score_phrase, " (full)"),
   y_score_full                  = paste0(form_y_lbl, " ", .score_phrase, " (full)"),
-  intervention_score_restricted = paste0(int_label, " ", .score_phrase, " (restricted)"),
-  control_score_restricted      = paste0(ctl_label, " ", .score_phrase, " (restricted)"),
+  intervention_score_restricted = paste0(int_display, " ", .score_phrase, " (restricted)"),
+  control_score_restricted      = paste0(ctl_display, " ", .score_phrase, " (restricted)"),
   period1_score_restricted      = paste0("Period 1 ", .score_phrase, " (restricted)"),
   period2_score_restricted      = paste0("Period 2 ", .score_phrase, " (restricted)")
 )
@@ -103,6 +126,65 @@ save_table(tbl2, "02_descriptive_statistics", subfolder = "descriptive",
            notes = score_note)
 
 # =============================================================================
+# TABLE 2b/2c: Alex-style restricted descriptive summaries
+# =============================================================================
+log_h2("Tables 2b/2c: Alex-style restricted descriptives")
+
+.alex <- results$alex_supporting %||% NULL
+
+if (!is.null(.alex$condition_descriptives) &&
+    nrow(.alex$condition_descriptives) > 0) {
+  tbl2b <- .alex$condition_descriptives |>
+    dplyr::transmute(
+      Condition = as.character(.data$condition),
+      N = .data$n,
+      `Mean (SD)` = sprintf("%.2f (%.2f)", .data$mean, .data$sd),
+      `Median [IQR]` = sprintf("%.2f [%.2f, %.2f]",
+                               .data$median, .data$iqr_low, .data$iqr_high),
+      Range = sprintf("%.2f-%.2f", .data$min, .data$max)
+    )
+
+  save_table(
+    tbl2b,
+    "02b_condition_descriptives_restricted",
+    subfolder = "descriptive",
+    caption = paste0("Restricted-score descriptive summary: ",
+                     int_display, " vs ", ctl_display),
+    notes = c(score_note, paste0("Score metric: ", .alex$score_label, "."))
+  )
+} else {
+  log_line("Table 2b skipped: Alex condition descriptives unavailable")
+}
+
+if (!is.null(.alex$sequence_descriptives) &&
+    nrow(.alex$sequence_descriptives) > 0) {
+  tbl2c <- .alex$sequence_descriptives |>
+    dplyr::transmute(
+      `Sequence order` = .data$sequence_display,
+      N = .data$n,
+      `AI-assisted M (SD)` = sprintf("%.2f (%.2f)",
+                                     .data$`AI-assisted mean`,
+                                     .data$`AI-assisted SD`),
+      `No-AI M (SD)` = sprintf("%.2f (%.2f)",
+                               .data$`No-AI mean`,
+                               .data$`No-AI SD`),
+      `Mean paired difference` = .data$`Mean paired difference`,
+      `SD paired difference` = .data$`SD paired difference`
+    )
+
+  save_table(
+    tbl2c,
+    "02c_sequence_descriptives_restricted",
+    subfolder = "descriptive",
+    caption = paste0("Restricted-score descriptive summary by sequence order"),
+    notes = c(score_note, paste0("Paired difference = ", int_display,
+                                 " minus ", ctl_display, "."))
+  )
+} else {
+  log_line("Table 2c skipped: Alex sequence descriptives unavailable")
+}
+
+# =============================================================================
 # TABLE 3: Primary Contrasts (intervention vs control + period effects)
 # =============================================================================
 log_h2("Table 3: Primary contrasts")
@@ -123,11 +205,11 @@ format_contrast <- function(res, label) {
 
 tbl3_rows <- list(
   format_contrast(results$contrast_intervention_full,
-    paste0(int_label, " vs ", ctl_label, " (full scoring; A=", int_label, ")")),
+    paste0(int_display, " vs ", ctl_display, " (full scoring; A=", int_display, ")")),
   format_contrast(results$contrast_period_full,
     "Period 2 vs Period 1 (full scoring; A=Period 2)"),
   format_contrast(results$contrast_intervention_restr,
-    paste0(int_label, " vs ", ctl_label, " (restricted scoring)")),
+    paste0(int_display, " vs ", ctl_display, " (restricted scoring)")),
   format_contrast(results$contrast_period_restr,
     "Period 2 vs Period 1 (restricted scoring)")
 )
@@ -183,7 +265,7 @@ if (!is.null(.t00_mm)) {
 # Period labels are fixed structural terminology.
 .tbl0_caption <- paste0(
   "Primary outcomes from the restricted primary analysis (", .restr_label, "). ",
-  "Mean Diff = Group A \u2212 Group B using paired within-participant comparisons. ",
+  "Mean Diff = Group A - Group B using paired within-participant comparisons. ",
   "MM Est (SE) = linear mixed-model fixed-effect estimate (SE), with sequence included ",
   "as a covariate and participant as a random intercept. ",
   score_note %||% ""
@@ -193,12 +275,12 @@ if (!is.null(.t00_mm)) {
 
 if (!is.null(.t00_con)) {
   .tbl0_rows[[1]] <- tibble::tibble(
-    `Contrast`               = paste0(int_label, " vs. ", ctl_label),
-    `Group A`                = int_label,
+    `Contrast`               = paste0(int_display, " vs. ", ctl_display),
+    `Group A`                = int_display,
     `Mean A (SD)`            = paste0(round(.t00_con$mean_a, 2), " (", round(.t00_con$sd_a, 2), ")"),
-    `Group B`                = ctl_label,
+    `Group B`                = ctl_display,
     `Mean B (SD)`            = paste0(round(.t00_con$mean_b, 2), " (", round(.t00_con$sd_b, 2), ")"),
-    !!paste0("Mean Diff (A \u2212 B)") := round(.t00_con$mean_diff, 3),
+    !!paste0("Mean Diff (A - B)") := round(.t00_con$mean_diff, 3),
     `95% CI`                 = fmt_ci(.t00_con$ci_lo, .t00_con$ci_hi),
     `Cohen dz`               = round(.t00_con$dz, 3),
     `paired p`               = if (!is.na(.t00_con$p)) sub("^= ", "", fmt_p(.t00_con$p)) else "NA",
@@ -214,7 +296,7 @@ if (!is.null(.t00_per)) {
     `Mean A (SD)`            = paste0(round(.t00_per$mean_a, 2), " (", round(.t00_per$sd_a, 2), ")"),
     `Group B`                = "Period 1",
     `Mean B (SD)`            = paste0(round(.t00_per$mean_b, 2), " (", round(.t00_per$sd_b, 2), ")"),
-    !!paste0("Mean Diff (A \u2212 B)") := round(.t00_per$mean_diff, 3),
+    !!paste0("Mean Diff (A - B)") := round(.t00_per$mean_diff, 3),
     `95% CI`                 = fmt_ci(.t00_per$ci_lo, .t00_per$ci_hi),
     `Cohen dz`               = round(.t00_per$dz, 3),
     `paired p`               = if (!is.na(.t00_per$p)) sub("^= ", "", fmt_p(.t00_per$p)) else "NA",
@@ -230,6 +312,10 @@ if (!is.null(tbl0) && nrow(tbl0) > 0) {
   save_table(
     tbl0, "00_overall_results", subfolder = "primary",
     caption = .tbl0_caption
+  )
+  save_table(
+    tbl0, "00_main_results", subfolder = "primary",
+    caption = paste0(.tbl0_caption, " Legacy filename alias of 00_overall_results.")
   )
 
   # PNG: single gt table with manuscript title (overrides save_table() PNG).
@@ -280,10 +366,10 @@ if (file.exists(.asgn_path)) {
     .design_tbl <- .asgn_raw |>
       dplyr::mutate(
         seq_grp = ifelse(.data$AI_Order == "1st",
-                         paste0(int_label, "-first"),
-                         paste0(ctl_label, "-first")),
-        cond_p1 = ifelse(.data$AI_Order == "1st", int_label,   ctl_label),
-        cond_p2 = ifelse(.data$AI_Order == "1st", ctl_label,   int_label),
+                         cfg$display_labels$sequence_ai_first %||% paste0(int_display, " first"),
+                         cfg$display_labels$sequence_control_first %||% paste0(ctl_display, " first")),
+        cond_p1 = ifelse(.data$AI_Order == "1st", int_display,   ctl_display),
+        cond_p2 = ifelse(.data$AI_Order == "1st", ctl_display,   int_display),
         form_p1 = ifelse(.data$X_Order  == "1st", form_x_lbl,  form_y_lbl),
         form_p2 = ifelse(.data$X_Order  == "1st", form_y_lbl,  form_x_lbl)
       ) |>
@@ -304,9 +390,11 @@ if (file.exists(.asgn_path)) {
         "Crossover study assignment structure. ",
         "Each row is one randomised assignment cell (Sequence group \u00d7 Form order). ",
         "Sequence group = randomised condition order: ",
-        int_label, "-first participants received ", int_label, " in Period 1 and ",
-        ctl_label, " in Period 2; ",
-        ctl_label, "-first participants received the reverse. ",
+        cfg$display_labels$sequence_ai_first %||% paste0(int_display, " first"),
+        " participants received ", int_display, " in Period 1 and ",
+        ctl_display, " in Period 2; ",
+        cfg$display_labels$sequence_control_first %||% paste0(ctl_display, " first"),
+        " participants received the reverse. ",
         "Form assignment is balanced within each sequence group. ",
         "N total = ", sum(.design_tbl$n), "."
       )
@@ -326,12 +414,12 @@ format_carryover <- function(res, label) {
   if (is.null(res)) return(NULL)
   tibble::tibble(
     Test    = label,
-    `Int-first Period 1 M (SD)` =
+    !!paste0(seq_ai_display, " Period 1 M (SD)") :=
       paste0(round(res$mean_a, 2), " (", round(res$sd_a, 2), ")"),
-    `Int-first n_a` = res$n_a,
-    `Ctl-first Period 1 M (SD)` =
+    !!paste0(seq_ai_display, " n") := res$n_a,
+    !!paste0(seq_ctl_display, " Period 1 M (SD)") :=
       paste0(round(res$mean_b, 2), " (", round(res$sd_b, 2), ")"),
-    `Ctl-first n_b` = res$n_b,
+    !!paste0(seq_ctl_display, " n") := res$n_b,
     `t`  = ifelse(!is.na(res$t), round(res$t, 3), "NA"),
     `p`  = ifelse(!is.na(res$p), fmt_p(res$p), "NA"),
     Interpretation = res$interpretation
@@ -342,12 +430,12 @@ format_seq_period <- function(res, label) {
   if (is.null(res)) return(NULL)
   tibble::tibble(
     Test    = label,
-    `AB Mean Diff (SD)` =
+    !!paste0(seq_ai_display, " mean period diff (SD)") :=
       paste0(round(res$mean_diff_ab, 2), " (", round(res$sd_diff_ab, 2), ")"),
-    `AB n` = res$n_ab,
-    `BA Mean Diff (SD)` =
+    !!paste0(seq_ai_display, " n") := res$n_ab,
+    !!paste0(seq_ctl_display, " mean period diff (SD)") :=
       paste0(round(res$mean_diff_ba, 2), " (", round(res$sd_diff_ba, 2), ")"),
-    `BA n` = res$n_ba,
+    !!paste0(seq_ctl_display, " n") := res$n_ba,
     `t`    = ifelse(!is.na(res$t), round(res$t, 3), "NA"),
     `p`    = ifelse(!is.na(res$p), fmt_p(res$p), "NA"),
     Interpretation = res$interpretation
@@ -430,7 +518,7 @@ if (!is.null(results$mixed_models$full$model1)) {
     coefs$scoring <- scoring_label
     tibble::tibble(
       Scoring   = scoring_label,
-      Term      = coefs$term,
+      Term      = .display_model_term(coefs$term),
       Estimate  = round(coefs$Estimate, 3),
       SE        = round(coefs$`Std. Error`, 3),
       df        = round(coefs$df, 1),
@@ -456,6 +544,41 @@ if (!is.null(results$mixed_models$full$model1)) {
 # =============================================================================
 # TABLE 8: Effect size summary (all contrasts, dz + approx CI + magnitude)
 # =============================================================================
+log_h2("Table 7b: Exploratory logistic mixed models")
+
+if (!is.null(.alex$logistic_models$table) &&
+    nrow(.alex$logistic_models$table) > 0) {
+  tbl7b <- .alex$logistic_models$table |>
+    dplyr::transmute(
+      Model = .data$Model,
+      Formula = .data$Formula,
+      Term = .data$Term,
+      Estimate = .data$`Log-odds estimate`,
+      SE = .data$SE,
+      OR = .data$OR,
+      `OR 95% CI` = sprintf("[%.3f, %.3f]",
+                            .data$`OR CI low`, .data$`OR CI high`),
+      z = .data$z,
+      p = vapply(.data$p, fmt_p, character(1)),
+      Interpretation = .data$Interpretation
+    )
+
+  save_table(
+    tbl7b,
+    "07b_logistic_mixed_model_results",
+    subfolder = "mixed_models",
+    caption = "Exploratory item-level logistic mixed models with binary correct/incorrect outcome",
+    notes = c(
+      "Outcome is numeric correct_binary coded 0/1.",
+      paste0("Model A is a condition model estimating ", int_display, " vs ", ctl_display, "."),
+      "Model B is a period-effect model estimating Period 2 vs Period 1.",
+      "Model C is a sequence-order model; it is not a period-effect model."
+    )
+  )
+} else {
+  log_line("Table 7b skipped: logistic mixed model summaries unavailable")
+}
+
 log_h2("Table 8: Effect size summary")
 
 ci_level_tbl <- as.numeric(cfg$figures$ci_level %||% 0.95)
@@ -487,8 +610,8 @@ ci_mult_tbl  <- stats::qnorm(0.5 + ci_level_tbl / 2)
 }
 
 tbl8 <- dplyr::bind_rows(
-  .es_tbl_row(results$contrast_intervention_full,  paste0(int_label, " vs ", ctl_label, " (full)")),
-  .es_tbl_row(results$contrast_intervention_restr, paste0(int_label, " vs ", ctl_label, " (restricted)")),
+  .es_tbl_row(results$contrast_intervention_full,  paste0(int_display, " vs ", ctl_display, " (full)")),
+  .es_tbl_row(results$contrast_intervention_restr, paste0(int_display, " vs ", ctl_display, " (restricted)")),
   .es_tbl_row(results$contrast_period_full,        "Period 2 vs Period 1 (full)"),
   .es_tbl_row(results$contrast_period_restr,       "Period 2 vs Period 1 (restricted)")
 )
@@ -504,10 +627,47 @@ if (!is.null(tbl8) && nrow(tbl8) > 0) {
 # =============================================================================
 # TABLE 9: 2×2 cell means (Period × Sequence group)
 # =============================================================================
+log_h2("Table 8b: Paired difference/effect-size summary")
+
+if (!is.null(.alex$paired_effect) && nrow(.alex$paired_effect) > 0) {
+  tbl8b <- .alex$paired_effect |>
+    dplyr::transmute(
+      Scoring = .data$scoring,
+      `Score metric` = .data$score_metric,
+      Comparison = .data$comparison,
+      N = .data$n,
+      `AI-assisted M (SD)` = sprintf("%.2f (%.2f)",
+                                     .data$`AI-assisted mean`,
+                                     .data$`AI-assisted SD`),
+      `No-AI M (SD)` = sprintf("%.2f (%.2f)",
+                               .data$`No-AI mean`,
+                               .data$`No-AI SD`),
+      `Mean paired difference` = .data$`Mean paired difference`,
+      `95% CI` = fmt_ci(.data$`95% CI low`, .data$`95% CI high`),
+      `Cohen dz` = .data$`Cohen dz`,
+      `Hedges gz` = .data$`Hedges gz`,
+      t = .data$t,
+      df = .data$df,
+      p = vapply(.data$p, fmt_p, character(1))
+    )
+
+  save_table(
+    tbl8b,
+    "08b_paired_difference_effect_size",
+    subfolder = "primary",
+    caption = paste0("Restricted paired difference and effect-size summary: ",
+                     int_display, " minus ", ctl_display),
+    notes = c(score_note, "Hedges gz is Cohen dz with the small-sample correction applied.")
+  )
+} else {
+  log_line("Table 8b skipped: paired effect summary unavailable")
+}
+
 log_h2("Table 9: 2x2 period x sequence cell means")
 
 tbl9 <- dat |>
-  dplyr::group_by(.data$sequence_group) |>
+  dplyr::mutate(sequence_display = sequence_display_label(.data$sequence_group, cfg)) |>
+  dplyr::group_by(.data$sequence_display) |>
   dplyr::summarise(
     n_p1          = dplyr::n(),
     mean_p1       = round(mean(.data$period1_score_restricted, na.rm = TRUE), 2),
@@ -519,7 +679,7 @@ tbl9 <- dat |>
     .groups = "drop"
   ) |>
   dplyr::transmute(
-    Sequence    = .data$sequence_group,
+    Sequence    = .data$sequence_display,
     n           = .data$n_p1,
     `Period 1 M (SD)`  = sprintf("%.2f (%.2f)", .data$mean_p1, .data$sd_p1),
     `Period 1 Median`  = .data$median_p1,
@@ -553,9 +713,34 @@ save_table(tbl9, "09_period_condition_cell_means", subfolder = "descriptive",
 # =============================================================================
 .run_norm <- isTRUE(cfg_get("optional_analyses", "run_normality_tests", default = TRUE))
 
-if (.run_norm) {
-  log_h2("Table 10: Normality tests (Shapiro-Wilk)")
+log_h2("Table 10a: Sign and paired permutation tests")
 
+if (!is.null(.alex$sign_permutation$table) &&
+    nrow(.alex$sign_permutation$table) > 0) {
+  tbl10a <- .alex$sign_permutation$table |>
+    dplyr::mutate(
+      p = vapply(.data$p, fmt_p, character(1))
+    )
+
+  save_table(
+    tbl10a,
+    "10a_sign_permutation_tests",
+    subfolder = "supplementary",
+    caption = paste0("Supporting nonparametric paired tests: ",
+                     int_display, " minus ", ctl_display),
+    notes = c(
+      score_note,
+      "Sign test and sign-flip permutation test use participant-level paired differences.",
+      "These are supporting/supplementary analyses."
+    )
+  )
+} else {
+  log_line("Table 10a skipped: sign/permutation test results unavailable")
+}
+
+log_h2("Table 10: Normality tests (Shapiro-Wilk)")
+
+if (.run_norm) {
   .sw_row <- function(x, label) {
     x_clean <- x[!is.na(x)]
     if (length(x_clean) < 3 || length(x_clean) > 5000) return(NULL)
@@ -570,12 +755,12 @@ if (.run_norm) {
   }
 
   tbl10 <- dplyr::bind_rows(
-    .sw_row(dat$intervention_score_full, paste0(int_label, " score (full)")),
-    .sw_row(dat$control_score_full,      paste0(ctl_label, " score (full)")),
+    .sw_row(dat$intervention_score_full, paste0(int_display, " score (full)")),
+    .sw_row(dat$control_score_full,      paste0(ctl_display, " score (full)")),
     .sw_row(dat$period1_score_full,      "Period 1 score (full)"),
     .sw_row(dat$period2_score_full,      "Period 2 score (full)"),
     .sw_row(dat$intervention_score_full - dat$control_score_full,
-            paste0(int_label, " \u2212 ", ctl_label, " difference")),
+            paste0(int_display, " \u2212 ", ctl_display, " difference")),
     .sw_row(dat$period2_score_full - dat$period1_score_full,
             "Period 2 \u2212 Period 1 difference")
   )
@@ -706,8 +891,8 @@ if (.run_restr && .has_restr) {
   }
 
   tbl13 <- dplyr::bind_rows(
-    .score_row(int_label, "intervention_score_full", "intervention_score_restricted"),
-    .score_row(ctl_label, "control_score_full",      "control_score_restricted"),
+    .score_row(int_display, "intervention_score_full", "intervention_score_restricted"),
+    .score_row(ctl_display, "control_score_full",      "control_score_restricted"),
     .score_row("Period 1", "period1_score_full",     "period1_score_restricted"),
     .score_row("Period 2", "period2_score_full",     "period2_score_restricted")
   )
@@ -717,13 +902,13 @@ if (.run_restr && .has_restr) {
     .es_block <- dplyr::bind_rows(
       tibble::tibble(
         Scoring    = "Full",
-        Contrast   = paste0(int_label, " vs ", ctl_label),
+        Contrast   = paste0(int_display, " vs ", ctl_display),
         dz         = round(results$contrast_intervention_full$dz,  3),
         p          = round(results$contrast_intervention_full$p,   4)
       ),
       tibble::tibble(
         Scoring    = "Restricted",
-        Contrast   = paste0(int_label, " vs ", ctl_label),
+        Contrast   = paste0(int_display, " vs ", ctl_display),
         dz         = round(results$contrast_intervention_restr$dz, 3),
         p          = round(results$contrast_intervention_restr$p,  4)
       )
@@ -755,9 +940,9 @@ if ("subgroup4" %in% names(dat)) {
 
   tbl14 <- dplyr::bind_rows(
     dat |> dplyr::mutate(.score = .data$intervention_score_full,
-                         cond_  = int_label),
+                         cond_  = int_display),
     dat |> dplyr::mutate(.score = .data$control_score_full,
-                         cond_  = ctl_label)
+                         cond_  = ctl_display)
   ) |>
     dplyr::group_by(subgroup4, cond_) |>
     dplyr::summarise(
@@ -771,15 +956,15 @@ if ("subgroup4" %in% names(dat)) {
         mean(.data$.score <= .floor14, na.rm = TRUE) * 100, 1),
       .groups = "drop"
     ) |>
-    dplyr::rename(
-      Subgroup      = subgroup4,
-      Condition     = cond_,
-      N             = n,
-      Mean          = mean_score,
-      SD            = sd_score,
-      Median        = median_score,
-      `Ceiling (%)` = pct_at_ceiling,
-      `Floor (%)`   = pct_at_floor
+    dplyr::transmute(
+      Subgroup      = .display_subgroup_label(.data$subgroup4),
+      Condition     = .data$cond_,
+      N             = .data$n,
+      Mean          = .data$mean_score,
+      SD            = .data$sd_score,
+      Median        = .data$median_score,
+      `Ceiling (%)` = .data$pct_at_ceiling,
+      `Floor (%)`   = .data$pct_at_floor
     )
 
   if (nrow(tbl14) > 0) {
@@ -804,13 +989,14 @@ if (!is.null(.period_int_full) && !all(is.na(.period_int_full))) {
   .build_period_tbl <- function(pobj, scoring) {
     tibble::tibble(
       Scoring         = scoring,
-      Group           = c(paste0(int_label, " in Period 1"),
-                          paste0(int_label, " in Period 2"),
+      Group           = c(paste0(int_display, " in Period 1"),
+                          paste0(int_display, " in Period 2"),
                           "Between-group test"),
       N               = c(pobj$n_int_p1, pobj$n_int_p2, NA_integer_),
-      `Mean (Int-Ctl)` = c(round(pobj$mean_diff_int_p1, 3),
-                            round(pobj$mean_diff_int_p2, 3),
-                            NA_real_),
+      !!paste0("Mean (", int_display, " - ", ctl_display, ")") :=
+        c(round(pobj$mean_diff_int_p1, 3),
+          round(pobj$mean_diff_int_p2, 3),
+          NA_real_),
       SD              = c(round(pobj$sd_diff_int_p1, 3),
                           round(pobj$sd_diff_int_p2, 3),
                           NA_real_),
@@ -832,7 +1018,7 @@ if (!is.null(.period_int_full) && !all(is.na(.period_int_full))) {
   save_table(tbl15, "15_period_specific_intervention_effect",
              subfolder = "period_effects",
              caption = paste0("Period-specific intervention effect: mean within-person difference (",
-                              int_label, " \u2212 ", ctl_label,
+                              int_display, " \u2212 ", ctl_display,
                               ") stratified by when intervention occurred"))
 } else {
   log_line("Table 15 skipped: period-specific intervention effect results not available")
@@ -856,15 +1042,16 @@ if (!is.null(.sg4f) && nrow(.sg4f) > 0) {
         Scoring,
         Subgroup   = subgroup4,
         N          = n,
-        `Mean Int` = mean_int,
-        `Mean Ctl` = mean_ctl,
+        `Mean AI-assisted` = mean_int,
+        `Mean No-AI` = mean_ctl,
         `Mean diff`= mean_diff,
         `CI low`   = ci_lo,
         `CI high`  = ci_hi,
         `dz`       = dz,
         `p-value`  = p
       ) |>
-      dplyr::mutate(dplyr::across(c(`Mean Int`,`Mean Ctl`,`Mean diff`,
+      dplyr::mutate(Subgroup = .display_subgroup_label(.data$Subgroup),
+                    dplyr::across(c(`Mean AI-assisted`,`Mean No-AI`,`Mean diff`,
                                     `CI low`,`CI high`,dz), \(x) round(x, 3)),
                     `p-value` = round(.data$`p-value`, 4))
   }
@@ -878,6 +1065,58 @@ if (!is.null(.sg4f) && nrow(.sg4f) > 0) {
              caption = paste0("Within-person intervention effect (Cohen\u2019s dz) for each 4-cell crossover subgroup"))
 } else {
   log_line("Table 16 skipped: subgroup4 contrasts not available")
+}
+
+# =============================================================================
+# TABLE 20: Post-hoc paired-test power/sample-size analysis
+# =============================================================================
+log_h2("Table 20: Post-hoc power/sample-size analysis")
+
+.power_res <- results$post_hoc_power
+if (!is.null(.power_res) && !is.null(.power_res$table) &&
+    nrow(.power_res$table) > 0) {
+  .n_power_col <- paste0("N for ", .power_res$target_power_label, " Power")
+  tbl20 <- .power_res$table |>
+    dplyr::mutate(
+      `Target effect` = paste0(
+        .data[["Target effect (percentage points)"]], " percentage points"
+      ),
+      `Power at observed N` = scales::percent(
+        .data[["Power at observed N"]],
+        accuracy = 0.1
+      )
+    ) |>
+    dplyr::rename(!!.n_power_col := n_for_target_power) |>
+    dplyr::select(
+      `Target effect`,
+      `Target effect (rescaled score units)`,
+      `Cohen dz`,
+      `Power at observed N`,
+      dplyr::all_of(.n_power_col)
+    )
+
+  save_table(
+    tbl20,
+    "20_post_hoc_power_analysis",
+    subfolder = "supplementary",
+    caption = paste0(
+      "Post-hoc paired-test sample-size analysis using restricted scoring, ",
+      "alpha = ", sprintf("%.2f", .power_res$alpha), ", two-sided test, and ",
+      .power_res$target_power_label, " target power."
+    ),
+    notes = c(
+      paste0("SD of paired AI-assisted minus No-AI differences = ",
+             round(.power_res$sd_diff, 3), "."),
+      paste0("Target effects are percentage-point differences converted to the ",
+             "configured common score scale before computing Cohen dz."),
+      paste0("Sample sizes were computed with ", .power_res$power_solver,
+             " using pwr.t.test-compatible arguments (power = ",
+             sprintf("%.2f", .power_res$target_power),
+             ", type = \"paired\", alternative = \"two.sided\").")
+    )
+  )
+} else {
+  log_line("Table 20 skipped: post_hoc_power results not available")
 }
 
 # =============================================================================
@@ -1019,6 +1258,9 @@ if (!is.null(.raw_tbl19)) {
   .seq_map_t19 <- dplyr::distinct(dat,
     participant    = as.character(.data$participant),
     sequence_group = .data$sequence_group
+  ) |>
+    dplyr::mutate(
+      sequence_display = sequence_display_label(.data$sequence_group, cfg)
   )
 
   .endorse_tbl19 <- function(items_df, cols_full, excl_cols, form_lbl) {
@@ -1056,10 +1298,10 @@ if (!is.null(.raw_tbl19)) {
     )
 
   .by_seq_t19 <- .long_t19 |>
-    dplyr::filter(!is.na(.data$sequence_group)) |>
-    dplyr::group_by(.data$Form, .data$Item, .data$sequence_group) |>
+    dplyr::filter(!is.na(.data$sequence_display)) |>
+    dplyr::group_by(.data$Form, .data$Item, .data$sequence_display) |>
     dplyr::summarise(pct = round(mean(.data$response) * 100, 1), .groups = "drop") |>
-    tidyr::pivot_wider(names_from = sequence_group, values_from = pct)
+    tidyr::pivot_wider(names_from = sequence_display, values_from = pct)
 
   tbl19 <- .overall_t19 |>
     dplyr::left_join(.by_seq_t19, by = c("Form", "Item")) |>
@@ -1075,8 +1317,14 @@ if (!is.null(.raw_tbl19)) {
 
   save_table(tbl19, "19_item_endorsement_rates",
              subfolder = "exploratory",
-             caption   = paste0("Per-item endorsement rates overall and by sequence group.",
-                                .excl_note))
+             caption   = paste0(
+               "Per-item endorsement rates overall and by sequence order (",
+               cfg$display_labels$sequence_control_first %||% "No-AI first",
+               " vs ",
+               cfg$display_labels$sequence_ai_first %||% "AI-assisted first",
+               ").",
+               .excl_note
+             ))
 } else {
   log_line("Table 19 skipped: raw_data not available")
 }

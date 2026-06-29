@@ -2,7 +2,7 @@
 ## R/05_figures.R
 ## All publication-quality figures.
 ## Rules:
-##   - No titles, no subtitles, no captions on the PNG
+##   - No titles/subtitles on the PNG; short captions are used only for figure notes
 ##   - Axis labels come from config (intervention_label, form labels, etc.)
 ##   - Filenames are descriptive
 ##   - All output as PNG at config DPI
@@ -32,6 +32,10 @@ int_label  <- cfg$study$intervention_label %||% "Intervention"
 ctl_label  <- cfg$study$control_label      %||% "Control"
 form_x_lbl <- cfg$study$form_x_label       %||% "Form X"
 form_y_lbl <- cfg$study$form_y_label       %||% "Form Y"
+ctl_display <- condition_display_label(ctl_label, cfg)
+int_display <- condition_display_label(int_label, cfg)
+ctl_short_label <- cfg$display_labels$condition_control_short %||% ctl_display
+int_short_label <- cfg$display_labels$condition_ai_short      %||% int_display
 scale_to   <- as.numeric(cfg$scores$scale_to %||% 10)
 score_lab_cfg <- cfg_get("figures", "y_axis_score_label",
                          default = score_metric_label(score_meta, scale_to))
@@ -104,51 +108,154 @@ spaghetti_layer <- function(df, x_col, y_col, group_col, id_col,
 # =============================================================================
 log_h2("Figure 1: Intervention vs Control (paired spaghetti)")
 
+.seq_ctl_raw_fig1 <- paste0(ctl_label, "-first")
+.seq_int_raw_fig1 <- paste0(int_label, "-first")
+.seq_raw_order_fig1 <- c(.seq_ctl_raw_fig1, .seq_int_raw_fig1)
+.seq_raw_order_fig1 <- c(
+  intersect(.seq_raw_order_fig1, unique(dat$sequence_group)),
+  setdiff(sort(unique(dat$sequence_group)), .seq_raw_order_fig1)
+)
+.seq_display_order_fig1 <- sequence_display_label(.seq_raw_order_fig1, cfg)
+.seq_raw_cols_fig1 <- stats::setNames(
+  c(
+    cfg_get("figures", "color_seq_ba", default = col_ctl),
+    cfg_get("figures", "color_seq_ab", default = col_int)
+  ),
+  c(.seq_ctl_raw_fig1, .seq_int_raw_fig1)
+)
+.seq_color_values_fig1 <- unname(.seq_raw_cols_fig1[.seq_raw_order_fig1])
+if (anyNA(.seq_color_values_fig1)) {
+  .seq_color_values_fig1[is.na(.seq_color_values_fig1)] <-
+    scales::hue_pal()(sum(is.na(.seq_color_values_fig1)))
+}
+.seq_cols_fig1 <- stats::setNames(.seq_color_values_fig1, .seq_display_order_fig1)
+
+.fig1_scoring <- if ("intervention_score_restricted" %in% names(dat)) "restricted" else "full"
+.fig1_int_col <- paste0("intervention_score_", .fig1_scoring)
+.fig1_ctl_col <- paste0("control_score_", .fig1_scoring)
+
 df_int <- dat |>
-  dplyr::select(participant, sequence_group,
-                int   = intervention_score_full,
-                ctl   = control_score_full) |>
+  dplyr::transmute(
+    participant,
+    sequence_group,
+    intervention_period,
+    control_period,
+    form_x_period,
+    form_y_period,
+    int = .data[[.fig1_int_col]],
+    ctl = .data[[.fig1_ctl_col]]
+  ) |>
   tidyr::pivot_longer(c(int, ctl),
                       names_to  = "condition_code",
                       values_to = "score") |>
   dplyr::mutate(
+    condition_period = dplyr::if_else(
+      .data$condition_code == "int",
+      .data$intervention_period,
+      .data$control_period
+    ),
+    test = dplyr::case_when(
+      .data$condition_period == .data$form_x_period ~ "X",
+      .data$condition_period == .data$form_y_period ~ "Y",
+      TRUE ~ NA_character_
+    ),
     condition = factor(
       dplyr::if_else(.data$condition_code == "int", int_label, ctl_label),
       levels = c(ctl_label, int_label)
+    ),
+    condition_x = dplyr::if_else(.data$condition_code == "int", 2, 1),
+    sequence_display = factor(
+      sequence_display_label(.data$sequence_group, cfg),
+      levels = .seq_display_order_fig1
     )
   )
 
+if (any(is.na(df_int$test))) {
+  log_warn("Figure 1 endpoint form labels contain missing values; check form period columns.")
+}
+
 group_means_int <- df_int |>
-  dplyr::group_by(.data$condition) |>
+  dplyr::group_by(.data$condition, .data$condition_x) |>
   dplyr::summarise(
     mean  = mean(.data$score, na.rm = TRUE),
     se    = sd(.data$score, na.rm = TRUE) / sqrt(sum(!is.na(.data$score))),
+    ci    = stats::qt(0.975, df = max(sum(!is.na(.data$score)) - 1L, 1L)) * .data$se,
     .groups = "drop"
   )
 
+.form_mark_jitter <- ggplot2::position_jitter(width = 0.06, height = 0, seed = 20260629)
+.form_mark_note <- paste(
+  "Letters indicate which post-test form was administered at each score:",
+  "X = Form X, Y = Form Y."
+)
+
 fig1 <- ggplot2::ggplot(df_int,
-              ggplot2::aes(x = .data$condition, y = .data$score)) +
-  ggplot2::geom_line(ggplot2::aes(group = .data$participant),
-                     colour = "grey70", linewidth = 0.4, alpha = 0.7) +
-  ggplot2::geom_jitter(ggplot2::aes(colour = .data$condition),
-                       width = 0.06, size = 2.2, alpha = 0.7) +
-  ggplot2::geom_crossbar(data = group_means_int,
-    ggplot2::aes(x = .data$condition, y = .data$mean,
-                 ymin = .data$mean - .data$se,
-                 ymax = .data$mean + .data$se,
-                 fill  = .data$condition),
-    width = 0.35, alpha = 0.25, colour = "grey30", linewidth = 0.5
+              ggplot2::aes(x = .data$condition_x, y = .data$score)) +
+  ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
+                      colour = "grey85", linewidth = 0.4) +
+  ggplot2::geom_ribbon(
+    data = group_means_int,
+    ggplot2::aes(x = .data$condition_x,
+                 ymin = .data$mean - .data$ci,
+                 ymax = .data$mean + .data$ci),
+    inherit.aes = FALSE,
+    fill = "grey45",
+    alpha = 0.12
+  ) +
+  ggplot2::geom_line(
+    ggplot2::aes(group = .data$participant, colour = .data$sequence_display),
+    linewidth = 0.4, alpha = 0.35, show.legend = TRUE
+  ) +
+  ggplot2::geom_text(
+    ggplot2::aes(label = .data$test, colour = .data$sequence_display),
+    position = .form_mark_jitter,
+    size = 3.2,
+    fontface = "bold",
+    alpha = 0.65,
+    na.rm = TRUE,
+    show.legend = FALSE
+  ) +
+  ggplot2::geom_line(
+    data = group_means_int,
+    ggplot2::aes(x = .data$condition_x, y = .data$mean),
+    inherit.aes = FALSE,
+    colour = "grey20",
+    linewidth = 1
+  ) +
+  ggplot2::geom_point(
+    data = group_means_int,
+    ggplot2::aes(x = .data$condition_x, y = .data$mean),
+    inherit.aes = FALSE,
+    shape = 21,
+    fill = "white",
+    colour = "grey20",
+    size = 2.5,
+    stroke = 0.6
   ) +
   ggplot2::scale_colour_manual(
-    values = c(stats::setNames(c(col_ctl, col_int), c(ctl_label, int_label))),
-    guide  = "none") +
+    values = .seq_cols_fig1,
+    name = "Sequence"
+  ) +
+  ggplot2::guides(
+    colour = ggplot2::guide_legend(
+      override.aes = list(alpha = 0.8, linewidth = 0.8)
+    )
+  ) +
   ggplot2::scale_fill_manual(
     values = c(stats::setNames(c(col_ctl, col_int), c(ctl_label, int_label))),
     guide  = "none") +
   ggplot2::scale_y_continuous(name = score_lab, limits = c(score_y_lo, scale_to),
                                breaks = score_y_breaks) +
-  ggplot2::xlab("Condition") +
-  theme_clean()
+  ggplot2::scale_x_continuous(
+    breaks = c(1, 2),
+    labels = c(ctl_short_label, int_short_label)
+  ) +
+  ggplot2::labs(x = "Condition", caption = .form_mark_note) +
+  theme_clean() +
+  ggplot2::theme(
+    legend.position = "bottom",
+    plot.caption = ggplot2::element_text(size = 8, colour = "grey35", hjust = 0)
+  )
 
 save_figure(fig1, "intervention_vs_control_paired", subfolder = "primary")
 
@@ -158,11 +265,16 @@ save_figure(fig1, "intervention_vs_control_paired", subfolder = "primary")
 log_h2("Figure 2: Intervention effect by sequence")
 
 df_seq <- df_int |>
-  dplyr::mutate(sequence_group = dat$sequence_group[
-    match(.data$participant, dat$participant)])
+  dplyr::mutate(
+    sequence_group = dat$sequence_group[match(.data$participant, dat$participant)],
+    sequence_display = factor(
+      sequence_display_label(.data$sequence_group, cfg),
+      levels = .seq_display_order_fig1
+    )
+  )
 
 group_means_seq <- df_seq |>
-  dplyr::group_by(.data$condition, .data$sequence_group) |>
+  dplyr::group_by(.data$condition, .data$condition_x, .data$sequence_display) |>
   dplyr::summarise(
     mean = mean(.data$score, na.rm = TRUE),
     se   = sd(.data$score, na.rm = TRUE) / sqrt(sum(!is.na(.data$score))),
@@ -170,17 +282,17 @@ group_means_seq <- df_seq |>
   )
 
 fig2 <- ggplot2::ggplot(df_seq,
-              ggplot2::aes(x = .data$condition, y = .data$score,
+              ggplot2::aes(x = .data$condition_x, y = .data$score,
                            colour = .data$condition)) +
   ggplot2::geom_line(ggplot2::aes(group = .data$participant),
                      colour = "grey70", linewidth = 0.35, alpha = 0.65) +
   ggplot2::geom_jitter(width = 0.07, size = 2.0, alpha = 0.7) +
   ggplot2::geom_point(data = group_means_seq,
-    ggplot2::aes(x = .data$condition, y = .data$mean),
+    ggplot2::aes(x = .data$condition_x, y = .data$mean),
     shape = 18, size = 4.5, stroke = 0.8
   ) +
   ggplot2::geom_errorbar(data = group_means_seq,
-    ggplot2::aes(x  = .data$condition, y = .data$mean,
+    ggplot2::aes(x  = .data$condition_x, y = .data$mean,
                  ymin = .data$mean - .data$se,
                  ymax = .data$mean + .data$se),
     width = 0.18, linewidth = 0.7
@@ -190,8 +302,12 @@ fig2 <- ggplot2::ggplot(df_seq,
     guide  = "none") +
   ggplot2::scale_y_continuous(name = score_lab, limits = c(score_y_lo, scale_to),
                                breaks = score_y_breaks) +
+  ggplot2::scale_x_continuous(
+    breaks = c(1, 2),
+    labels = c(ctl_short_label, int_short_label)
+  ) +
   ggplot2::xlab("Condition") +
-  ggplot2::facet_wrap(~ sequence_group) +
+  ggplot2::facet_wrap(~ sequence_display) +
   theme_clean()
 
 save_figure(fig2, "intervention_effect_by_sequence", subfolder = "primary")
@@ -213,11 +329,15 @@ df_period <- dat |>
 log_h2("Figure 4: Period effects by sequence")
 
 df_period_seq <- dplyr::mutate(df_period,
-  sequence_group = dat$sequence_group[match(.data$participant, dat$participant)]
+  sequence_group = dat$sequence_group[match(.data$participant, dat$participant)],
+  sequence_display = factor(
+    sequence_display_label(.data$sequence_group, cfg),
+    levels = .seq_display_order_fig1
+  )
 )
 
 group_means_period_seq <- df_period_seq |>
-  dplyr::group_by(.data$period, .data$sequence_group) |>
+  dplyr::group_by(.data$period, .data$sequence_display) |>
   dplyr::summarise(
     mean = mean(.data$score, na.rm = TRUE),
     se   = sd(.data$score, na.rm = TRUE) / sqrt(sum(!is.na(.data$score))),
@@ -244,7 +364,7 @@ fig4 <- ggplot2::ggplot(df_period_seq,
   ggplot2::scale_y_continuous(name = score_lab, limits = c(score_y_lo, scale_to),
                                breaks = score_y_breaks) +
   ggplot2::xlab("Period") +
-  ggplot2::facet_wrap(~ sequence_group) +
+  ggplot2::facet_wrap(~ sequence_display) +
   theme_clean()
 
 save_figure(fig4, "period_effects_by_sequence", subfolder = "period_effects")
@@ -501,6 +621,7 @@ col_seq_ba <- cfg_get("figures", "color_seq_ba", default = col_ctl)
 .seq_ba_lbl  <- paste0(ctl_label, "-first")
 seq_colors   <- stats::setNames(c(col_seq_ab, col_seq_ba),
                                  c(.seq_ab_lbl, .seq_ba_lbl))
+seq_color_labels <- sequence_display_label(names(seq_colors), cfg)
 
 # =============================================================================
 # FIGURE 10: Score delta dotplot (int Ã¢Ë†â€™ ctl, sorted lollipop per participant)
@@ -598,6 +719,69 @@ if (!is.null(forest_data) && nrow(forest_data) > 0) {
 }
 
 # =============================================================================
+# FIGURE 12: Post-hoc paired-test power curve
+# =============================================================================
+log_h2("Figure 12: Post-hoc power curve")
+
+.power_res <- results$post_hoc_power
+if (!is.null(.power_res) && !is.null(.power_res$curve) &&
+    nrow(.power_res$curve) > 0) {
+  .curve12 <- .power_res$curve |>
+    dplyr::mutate(
+      target_effect_label = factor(
+        .data$target_effect_label,
+        levels = unique(.data$target_effect_label[order(.data$target_effect_pct)])
+      )
+    )
+
+  .line_dat12 <- .curve12 |>
+    dplyr::distinct(target_effect_label, n_for_target_power) |>
+    dplyr::left_join(
+      .curve12 |>
+        dplyr::select(target_effect_label, n_pairs, power),
+      by = c("target_effect_label", "n_for_target_power" = "n_pairs")
+    )
+
+  .legend_title12 <- paste0(
+    "Target effect (N for ", .power_res$target_power_label, " power)"
+  )
+
+  fig12 <- ggplot2::ggplot(
+      .curve12,
+      ggplot2::aes(x = .data$n_pairs, y = .data$power,
+                   colour = .data$target_effect_label)
+    ) +
+    ggplot2::geom_hline(
+      yintercept = .power_res$target_power,
+      linetype = "dotted",
+      colour = "grey35",
+      linewidth = 0.6
+    ) +
+    ggplot2::geom_line(linewidth = 0.85) +
+    ggplot2::geom_point(
+      data = .line_dat12,
+      ggplot2::aes(x = .data$n_for_target_power, y = .data$power),
+      size = 2.2,
+      show.legend = FALSE
+    ) +
+    ggplot2::scale_y_continuous(
+      name = "Power",
+      limits = c(0, 1),
+      labels = scales::percent_format(accuracy = 1)
+    ) +
+    ggplot2::scale_x_continuous(name = "Number of paired participants") +
+    ggplot2::scale_colour_brewer(palette = "Dark2", name = .legend_title12) +
+    theme_clean() +
+    ggplot2::theme(legend.position = "bottom")
+
+  save_figure(fig12, "post_hoc_power_curve",
+              subfolder = "supplementary",
+              width = 7.5, height = 5)
+} else {
+  log_line("Post-hoc power curve skipped: post_hoc_power results not available")
+}
+
+# =============================================================================
 # FIGURE 13: Empirical CDF by condition
 # =============================================================================
 log_h2("Figure 13: Empirical CDF by condition")
@@ -672,6 +856,171 @@ save_figure(fig14, "score_difference_histogram", subfolder = "descriptive",
 # =============================================================================
 # FIGURE 15: Sequence trajectories (Period 1 Ã¢â€ â€™ 2, group means + individual lines)
 # =============================================================================
+log_h2("Supporting figures: restricted score and paired-test diagnostics")
+
+.alex <- results$alex_supporting %||% NULL
+.alex_scoring <- .alex$scoring %||% if ("intervention_score_restricted" %in% names(dat)) "restricted" else "full"
+.alex_ai_col <- paste0("intervention_score_", .alex_scoring)
+.alex_noai_col <- paste0("control_score_", .alex_scoring)
+
+if (all(c(.alex_ai_col, .alex_noai_col) %in% names(dat))) {
+  .alex_condition_scores <- dplyr::bind_rows(
+    dplyr::transmute(dat, condition = ctl_display, score = .data[[.alex_noai_col]]),
+    dplyr::transmute(dat, condition = int_display, score = .data[[.alex_ai_col]])
+  ) |>
+    dplyr::mutate(condition = factor(.data$condition, levels = c(ctl_display, int_display)))
+
+  .hist_range <- diff(range(.alex_condition_scores$score, na.rm = TRUE))
+  .hist_bw <- if (.hist_range <= 20) 1 else ceiling(.hist_range / 20)
+
+  fig_alex_hist <- ggplot2::ggplot(
+      .alex_condition_scores,
+      ggplot2::aes(x = .data$score, fill = .data$condition)
+    ) +
+    ggplot2::geom_histogram(
+      binwidth = .hist_bw,
+      alpha = 0.5,
+      position = "identity",
+      colour = "white",
+      linewidth = 0.3
+    ) +
+    ggplot2::scale_fill_manual(
+      values = stats::setNames(c(col_ctl, col_int), c(ctl_display, int_display)),
+      name = "Condition"
+    ) +
+    ggplot2::scale_x_continuous(name = score_lab, limits = c(score_y_lo, scale_to),
+                                breaks = score_y_breaks) +
+    ggplot2::scale_y_continuous(name = "Count (participant scores)") +
+    theme_clean() +
+    ggplot2::theme(legend.position = "bottom")
+
+  save_figure(fig_alex_hist, "condition_score_histogram_restricted",
+              subfolder = "supplementary", width = 6.5, height = 4.5)
+}
+
+if (!is.null(.alex$sign_permutation$paired_differences) &&
+    nrow(.alex$sign_permutation$paired_differences) > 0) {
+  .pdiff <- .alex$sign_permutation$paired_differences |>
+    dplyr::arrange(.data$paired_diff) |>
+    dplyr::mutate(
+      rank_id = factor(seq_len(dplyr::n())),
+      direction = dplyr::case_when(
+        .data$paired_diff > 0 ~ paste0(int_display, " higher"),
+        .data$paired_diff < 0 ~ paste0(ctl_display, " higher"),
+        TRUE ~ "Tie"
+      )
+    )
+
+  .dir_cols <- stats::setNames(
+    c(col_int, col_ctl, "grey55"),
+    c(paste0(int_display, " higher"), paste0(ctl_display, " higher"), "Tie")
+  )
+
+  fig_alex_diff <- ggplot2::ggplot(
+      .pdiff,
+      ggplot2::aes(x = .data$paired_diff, y = .data$rank_id)
+    ) +
+    ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
+                        colour = "grey45", linewidth = 0.55) +
+    ggplot2::geom_segment(
+      ggplot2::aes(x = 0, xend = .data$paired_diff,
+                   y = .data$rank_id, yend = .data$rank_id),
+      colour = "grey70",
+      linewidth = 0.45
+    ) +
+    ggplot2::geom_point(ggplot2::aes(colour = .data$direction),
+                        size = pt_size, alpha = pt_alpha) +
+    ggplot2::scale_colour_manual(values = .dir_cols, name = NULL) +
+    ggplot2::scale_x_continuous(
+      name = paste0(int_display, " - ", ctl_display, " (score difference)")
+    ) +
+    ggplot2::ylab("Participant (sorted by paired difference)") +
+    theme_clean() +
+    ggplot2::theme(
+      legend.position = "bottom",
+      axis.text.y = ggplot2::element_blank(),
+      axis.ticks.y = ggplot2::element_blank()
+    )
+
+  save_figure(fig_alex_diff, "paired_difference_dotplot_restricted",
+              subfolder = "supplementary",
+              width = 6.5, height = max(4.5, nrow(.pdiff) * 0.32))
+
+  fig_alex_seq_hist <- ggplot2::ggplot(
+      .pdiff,
+      ggplot2::aes(x = .data$paired_diff, fill = .data$sequence_display)
+    ) +
+    ggplot2::geom_histogram(binwidth = .hist_bw, alpha = 0.65,
+                            position = "identity", colour = "white", linewidth = 0.25) +
+    ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
+                        colour = "grey45", linewidth = 0.55) +
+    ggplot2::scale_fill_manual(values = .seq_cols_fig1, name = "Sequence") +
+    ggplot2::scale_x_continuous(
+      name = paste0(int_display, " - ", ctl_display, " (score difference)")
+    ) +
+    ggplot2::scale_y_continuous(name = "Count (participants)") +
+    theme_clean() +
+    ggplot2::theme(legend.position = "bottom")
+
+  save_figure(fig_alex_seq_hist, "sequence_difference_histogram_restricted",
+              subfolder = "supplementary", width = 6.5, height = 4.5)
+}
+
+if (!is.null(.alex$sign_permutation$counts) &&
+    nrow(.alex$sign_permutation$counts) > 0) {
+  .sign_levels <- c(paste0(int_display, " higher"), paste0(ctl_display, " higher"), "Tie")
+  .sign_counts <- .alex$sign_permutation$counts |>
+    dplyr::mutate(
+      Direction = factor(.data$Direction,
+                         levels = .sign_levels)
+    )
+
+  fig_sign_counts <- ggplot2::ggplot(
+      .sign_counts,
+      ggplot2::aes(x = .data$Direction, y = .data$n, fill = .data$Direction)
+    ) +
+    ggplot2::geom_col(width = 0.55, colour = "white", linewidth = 0.3) +
+    ggplot2::geom_text(ggplot2::aes(label = .data$n), vjust = -0.35, size = 3.6) +
+    ggplot2::scale_fill_manual(
+      values = stats::setNames(
+        c(col_int, col_ctl, "grey60"),
+        .sign_levels
+      ),
+      guide = "none"
+    ) +
+    ggplot2::scale_y_continuous(name = "Participants", breaks = scales::breaks_width(1)) +
+    ggplot2::xlab(NULL) +
+    theme_clean()
+
+  save_figure(fig_sign_counts, "sign_test_counts_restricted",
+              subfolder = "supplementary", width = 5.8, height = 4)
+}
+
+if (!is.null(.alex$sign_permutation$permutation_distribution) &&
+    nrow(.alex$sign_permutation$permutation_distribution) > 0) {
+  .perm_dist <- .alex$sign_permutation$permutation_distribution
+  .obs_diff <- .alex$sign_permutation$observed_mean_difference %||% NA_real_
+
+  fig_perm <- ggplot2::ggplot(
+      .perm_dist,
+      ggplot2::aes(x = .data$permuted_mean_difference)
+    ) +
+    ggplot2::geom_histogram(bins = 40, fill = "grey70",
+                            colour = "white", linewidth = 0.25) +
+    ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
+                        colour = "grey40", linewidth = 0.55) +
+    ggplot2::geom_vline(xintercept = c(-abs(.obs_diff), abs(.obs_diff)),
+                        colour = col_int, linewidth = 0.75) +
+    ggplot2::scale_x_continuous(
+      name = paste0("Permuted mean difference (", int_display, " - ", ctl_display, ")")
+    ) +
+    ggplot2::scale_y_continuous(name = "Permutation count") +
+    theme_clean()
+
+  save_figure(fig_perm, "paired_permutation_null_restricted",
+              subfolder = "supplementary", width = 6.5, height = 4.5)
+}
+
 log_h2("Figure 15: Sequence group trajectories")
 
 df_traj <- dat |>
@@ -716,7 +1065,8 @@ fig15 <- ggplot2::ggplot(df_traj,
     ggplot2::aes(x = .data$period, y = .data$tmean),
     size = 3.5
   ) +
-  ggplot2::scale_colour_manual(values = seq_colors, name = "Sequence") +
+  ggplot2::scale_colour_manual(values = seq_colors, labels = seq_color_labels,
+                               name = "Sequence") +
   ggplot2::scale_y_continuous(name = score_lab, limits = c(score_y_lo, scale_to),
                                breaks = score_y_breaks) +
   ggplot2::xlab(NULL) +
@@ -1213,7 +1563,8 @@ fig25 <- ggplot2::ggplot(cell_means_25,
     width = eb_width, linewidth = 0.8
   ) +
   ggplot2::geom_point(size = 3.8) +
-  ggplot2::scale_colour_manual(values = seq_colors, name = "Sequence") +
+  ggplot2::scale_colour_manual(values = seq_colors, labels = seq_color_labels,
+                               name = "Sequence") +
   ggplot2::scale_y_continuous(name = score_lab, limits = c(score_y_lo, scale_to),
                                breaks = score_y_breaks) +
   ggplot2::xlab("Period (condition assigned)") +
@@ -1683,11 +2034,37 @@ if (!is.null(.raw_data_27)) {
       .groups = "drop"
     )
 
-  .seq_lvls29 <- sort(unique(.summ29$sequence_group))
-  .seq_cols29 <- stats::setNames(
-    c(col_int, col_ctl, "#8B6914", "#2F4F8F")[seq_along(.seq_lvls29)],
-    .seq_lvls29
+  .seq_ctl_raw29 <- paste0(ctl_label, "-first")
+  .seq_int_raw29 <- paste0(int_label, "-first")
+  .seq_raw_order29 <- c(.seq_ctl_raw29, .seq_int_raw29)
+  .seq_raw_order29 <- c(
+    intersect(.seq_raw_order29, unique(.summ29$sequence_group)),
+    setdiff(sort(unique(.summ29$sequence_group)), .seq_raw_order29)
   )
+  .seq_display_order29 <- sequence_display_label(.seq_raw_order29, cfg)
+  .seq_raw_cols29 <- stats::setNames(
+    c(
+      cfg_get("figures", "color_seq_ba", default = col_ctl),
+      cfg_get("figures", "color_seq_ab", default = col_int)
+    ),
+    c(.seq_ctl_raw29, .seq_int_raw29)
+  )
+  .seq_color_values29 <- unname(.seq_raw_cols29[.seq_raw_order29])
+  if (anyNA(.seq_color_values29)) {
+    .seq_color_values29[is.na(.seq_color_values29)] <-
+      scales::hue_pal()(sum(is.na(.seq_color_values29)))
+  }
+  .seq_cols29 <- stats::setNames(
+    .seq_color_values29,
+    .seq_display_order29
+  )
+  .summ29 <- .summ29 |>
+    dplyr::mutate(
+      sequence_display = factor(
+        sequence_display_label(.data$sequence_group, cfg),
+        levels = .seq_display_order29
+      )
+    )
   has_excl29     <- length(.raw_data_27$x_excluded) > 0 ||
                     length(.raw_data_27$y_excluded) > 0
   # Two-level caption for Figure 29 Ã¢â‚¬â€ combine X and Y exclusion contexts.
@@ -1713,7 +2090,7 @@ if (!is.null(.raw_data_27)) {
 
   fig29 <- ggplot2::ggplot(.summ29,
       ggplot2::aes(x = .data$item, y = .data$pct,
-                   fill = .data$sequence_group)) +
+                   fill = .data$sequence_display)) +
     ggplot2::geom_col(position = ggplot2::position_dodge(width = 0.75),
                       width = 0.65) +
     ggplot2::geom_hline(yintercept = 50, linetype = "dashed",
@@ -1721,7 +2098,7 @@ if (!is.null(.raw_data_27)) {
     ggplot2::facet_wrap(~ form, ncol = 1, scales = "free_x") +
     ggplot2::scale_y_continuous(limits = c(0, 100),
                                 labels = function(x) paste0(x, "%")) +
-    ggplot2::scale_fill_manual(values = .seq_cols29, name = "Sequence group") +
+    ggplot2::scale_fill_manual(values = .seq_cols29, name = "Sequence order") +
     ggplot2::labs(
       x       = NULL,
       y       = "% Correct",

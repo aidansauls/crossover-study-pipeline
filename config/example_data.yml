@@ -35,6 +35,21 @@ analysis:
   ceiling_threshold: null
   floor_threshold: null
 
+power_analysis:
+  target_power: 0.80
+  target_effects_pct: [5, 8, 10, 12, 15, 20]
+  max_n: null
+
+display_labels:
+  condition_control: "No-AI"
+  condition_ai: "AI-assisted"
+  condition_control_short: "No-AI"
+  condition_ai_short: "AI-assisted"
+  condition_control_session: "No-AI study"
+  condition_ai_session: "AI-assisted study"
+  sequence_control_first: "No-AI first"
+  sequence_ai_first: "AI-assisted first"
+
 figures:
   dpi: 300
   width_in: 7.5
@@ -80,6 +95,8 @@ optional_analyses:
   run_ceiling_effects_figure: true
   run_period_specific_intervention: true
   run_subgroup4_contrasts: true
+  run_post_hoc_power: true
+  run_logistic_mixed_models: true
 
 psychometrics:
   ability_strata: 4

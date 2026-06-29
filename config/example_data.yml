@@ -40,6 +40,11 @@ power_analysis:
   target_effects_pct: [5, 8, 10, 12, 15, 20]
   max_n: null
 
+reference_analysis:
+  enabled: true
+  output_label: "Reference-analysis style"
+  output_prefix: "reference"
+
 display_labels:
   condition_control: "No-AI"
   condition_ai: "AI-assisted"

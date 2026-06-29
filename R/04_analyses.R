@@ -6,7 +6,7 @@
 ##   3. Period effects (practice, carryover via Grizzle test)
 ##   4. Sequence x period interaction
 ##   5. Linear mixed-effects models
-## Copyright (c) 2026 Aidan Sauls — see LICENSE for terms.
+## Copyright (c) 2026 Aidan Sauls â€” see LICENSE for terms.
 ## =============================================================================
 
 .script_dir <- local({
@@ -283,11 +283,11 @@ if (!.run_power) {
 }
 
 # =============================================================================
-# 2c. ALEX-STYLE SUPPORTING ANALYSES (RESTRICTED PRIMARY SCORING)
+# 2c. REFERENCE SUPPORTING ANALYSES (RESTRICTED PRIMARY SCORING)
 # =============================================================================
-log_h2("Alex-style supporting analyses")
+log_h2("Reference supporting analyses")
 
-alex_supporting <- list(
+reference_analysis <- list(
   scoring = .primary_scoring,
   score_label = .primary_score_label,
   condition_descriptives = NULL,
@@ -298,10 +298,10 @@ alex_supporting <- list(
 )
 
 if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
-  log_warn("Alex-style supporting analyses skipped: primary score columns not found.")
+  log_warn("Reference supporting analyses skipped: primary score columns not found.")
 } else {
   validate_score_columns(c(.primary_ai_col, .primary_noai_col), score_meta,
-                         "Alex-style supporting analyses")
+                         "Reference supporting analyses")
 
   .score_summary <- function(x) {
     x <- x[!is.na(x)]
@@ -339,7 +339,7 @@ if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
       condition = factor(.data$condition, levels = c(ctl_display, int_display))
     )
 
-  alex_supporting$condition_descriptives <- .condition_long_primary |>
+  reference_analysis$condition_descriptives <- .condition_long_primary |>
     dplyr::group_by(.data$condition) |>
     dplyr::summarise(
       n = sum(!is.na(.data$score)),
@@ -364,7 +364,7 @@ if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
     ) |>
     dplyr::filter(!is.na(.data$paired_diff))
 
-  alex_supporting$sequence_descriptives <- .paired_df |>
+  reference_analysis$sequence_descriptives <- .paired_df |>
     dplyr::group_by(.data$sequence_display) |>
     dplyr::summarise(
       n = dplyr::n(),
@@ -387,7 +387,7 @@ if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
   } else {
     NA_real_
   }
-  alex_supporting$paired_effect <- tibble::tibble(
+  reference_analysis$paired_effect <- tibble::tibble(
     scoring = .primary_scoring,
     score_metric = score_label,
     comparison = paste0(int_display, " minus ", ctl_display),
@@ -444,7 +444,7 @@ if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
     .perm_dist <- tibble::tibble(permuted_mean_difference = .perm_means)
   }
 
-  alex_supporting$sign_permutation <- list(
+  reference_analysis$sign_permutation <- list(
     paired_differences = .paired_df,
     counts = tibble::tibble(
       Direction = c(paste0(int_display, " higher"), paste0(ctl_display, " higher"), "Tie"),
@@ -469,8 +469,8 @@ if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
     observed_mean_difference = .obs_mean
   )
 
-  log_check("Alex paired difference definition: ", int_display, " minus ", ctl_display)
-  log_check("Alex sign test counts: improved=", .n_improved,
+  log_check("Reference paired difference definition: ", int_display, " minus ", ctl_display)
+  log_check("Reference sign test counts: improved=", .n_improved,
             ", worsened=", .n_worsened, ", tied=", .n_tied)
 }
 
@@ -629,7 +629,7 @@ if (.fit_logistic_models && !is.null(raw_data) && requireNamespace("lme4", quiet
 
       .log_table <- dplyr::bind_rows(lapply(.log_models, .extract_logit))
 
-      alex_supporting$logistic_models <- list(
+      reference_analysis$logistic_models <- list(
         data = .logit_df,
         models = .log_models,
         table = .log_table
@@ -675,7 +675,7 @@ if (!is.null(contrast_period_restr)) log_paired_result(contrast_period_restr)
 # 4. CARRYOVER TEST (Grizzle 1965)
 # The standard crossover carryover test compares Period-1 scores between
 # sequence groups. Significant difference suggests carryover.
-# Requires ≥ min_n_carryover per group (set in config).
+# Requires â‰¥ min_n_carryover per group (set in config).
 # =============================================================================
 log_h2("Carryover test (Grizzle)")
 
@@ -870,7 +870,7 @@ for (.spi in list(seq_period_full, seq_period_restr)) {
 # their Period-1 score and control is Period-2.  For the control-first (BA)
 # group the intervention score is their Period-2 score and control is Period-1.
 # We compare the within-person intervention-vs-control DIFFERENCE between the
-# two sequence groups — a significant difference means the period in which
+# two sequence groups â€” a significant difference means the period in which
 # the intervention occurred moderates(amplifies/dampens) the effect.
 # =============================================================================
 log_h2("Period-specific intervention effect (period when int. occurred)")
@@ -966,7 +966,7 @@ for (.pi in list(period_int_full, period_int_restr)) {
 
 # =============================================================================
 # 5c. 4-SUBGROUP CONTRASTS
-# For each of the four subgroups (seq × int-form), compute
+# For each of the four subgroups (seq Ã— int-form), compute
 # the intervention-vs-control contrast. Allows checking whether the
 # intervention effect is consistent across all four subgroup configurations.
 # =============================================================================
@@ -1146,7 +1146,7 @@ if (requireNamespace("lme4", quietly = TRUE) &&
   }
   
 } else {
-  log_warn("lme4/lmerTest not available — mixed models skipped.")
+  log_warn("lme4/lmerTest not available â€” mixed models skipped.")
   log_warn("Install with: install.packages(c('lme4', 'lmerTest'))")
 }
 
@@ -1165,7 +1165,7 @@ results <- list(
   ctl_label           = ctl_label,
   descriptives        = descriptives,
   sequence_tbl        = sequence_tbl,
-  alex_supporting     = alex_supporting,
+  reference_analysis     = reference_analysis,
   contrast_intervention_full  = contrast_intervention_full,
   contrast_intervention_restr = contrast_intervention_restr,
   post_hoc_power              = post_hoc_power,
@@ -1265,12 +1265,12 @@ if (exists("session_record_result")) {
     )
   }
 
-  if (!is.null(alex_supporting$paired_effect)) {
-    .ape <- alex_supporting$paired_effect
+  if (!is.null(reference_analysis$paired_effect)) {
+    .ape <- reference_analysis$paired_effect
     session_record_result(
-      "alex_supporting__paired_effect",
+      "reference_analysis__paired_effect",
       paste0(
-        "scoring=", alex_supporting$scoring,
+        "scoring=", reference_analysis$scoring,
         "  diff=", round(.ape[["Mean paired difference"]][1], 3),
         "  dz=", round(.ape[["Cohen dz"]][1], 3),
         "  Hedges gz=", round(.ape[["Hedges gz"]][1], 3),
@@ -1279,10 +1279,10 @@ if (exists("session_record_result")) {
     )
   }
 
-  if (!is.null(alex_supporting$sign_permutation$table)) {
-    .spt <- alex_supporting$sign_permutation$table
+  if (!is.null(reference_analysis$sign_permutation$table)) {
+    .spt <- reference_analysis$sign_permutation$table
     session_record_result(
-      "alex_supporting__sign_permutation",
+      "reference_analysis__sign_permutation",
       paste0(
         .spt$Test, " p ", vapply(.spt$p, fmt_p, character(1)),
         collapse = "; "
@@ -1424,3 +1424,4 @@ if (!is.null(sg4_contrasts_full) && nrow(sg4_contrasts_full) > 0) {
   }
 }
 log_line(strrep("-", 60))
+

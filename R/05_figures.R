@@ -6,7 +6,7 @@
 ##   - Axis labels come from config (intervention_label, form labels, etc.)
 ##   - Filenames are descriptive
 ##   - All output as PNG at config DPI
-## Copyright (c) 2026 Aidan Sauls Ã¢â‚¬â€ see LICENSE for terms.
+## Copyright (c) 2026 Aidan Sauls ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â see LICENSE for terms.
 ## =============================================================================
 
 .script_dir <- local({
@@ -68,7 +68,7 @@ col_ctl   <- cfg_get("figures","color_control",      default="#CD853F")
 col_p1    <- cfg_get("figures","color_period1",      default="#4682B4")
 col_p2    <- cfg_get("figures","color_period2",      default="#B22222")
 
-# Helper: produce factor levels in numeric order (1, 2, Ã¢â‚¬Â¦, 10, 11, Ã¢â‚¬Â¦).
+# Helper: produce factor levels in numeric order (1, 2, ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦, 10, 11, ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦).
 # Falls back to alphabetical if participant IDs aren't all numeric.
 .part_levels <- function(x) {
   u <- as.character(unique(x))
@@ -104,7 +104,7 @@ spaghetti_layer <- function(df, x_col, y_col, group_col, id_col,
 }
 
 # =============================================================================
-# FIGURE 1: Intervention vs Control Ã¢â‚¬â€ paired spaghetti
+# FIGURE 1: Intervention vs Control ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â paired spaghetti
 # =============================================================================
 log_h2("Figure 1: Intervention vs Control (paired spaghetti)")
 
@@ -182,6 +182,8 @@ group_means_int <- df_int |>
     ci    = stats::qt(0.975, df = max(sum(!is.na(.data$score)) - 1L, 1L)) * .data$se,
     .groups = "drop"
   )
+.fig1_ylim <- score_zoom_limits_common(df_int$score, scale_to = scale_to)
+.fig1_noai_mean <- group_means_int$mean[group_means_int$condition_x == 1][1]
 
 .form_mark_jitter <- ggplot2::position_jitter(width = 0.06, height = 0, seed = 20260629)
 .form_mark_note <- paste(
@@ -191,8 +193,8 @@ group_means_int <- df_int |>
 
 fig1 <- ggplot2::ggplot(df_int,
               ggplot2::aes(x = .data$condition_x, y = .data$score)) +
-  ggplot2::geom_hline(yintercept = 0, linetype = "dashed",
-                      colour = "grey85", linewidth = 0.4) +
+  ggplot2::geom_hline(yintercept = .fig1_noai_mean, linetype = "dotted",
+                      colour = "grey65", linewidth = 0.45) +
   ggplot2::geom_ribbon(
     data = group_means_int,
     ggplot2::aes(x = .data$condition_x,
@@ -244,12 +246,16 @@ fig1 <- ggplot2::ggplot(df_int,
   ggplot2::scale_fill_manual(
     values = c(stats::setNames(c(col_ctl, col_int), c(ctl_label, int_label))),
     guide  = "none") +
-  ggplot2::scale_y_continuous(name = score_lab, limits = c(score_y_lo, scale_to),
-                               breaks = score_y_breaks) +
+  ggplot2::scale_y_continuous(
+    name = score_lab,
+    breaks = score_y_breaks,
+    expand = ggplot2::expansion(mult = c(0.03, 0.08))
+  ) +
   ggplot2::scale_x_continuous(
     breaks = c(1, 2),
     labels = c(ctl_short_label, int_short_label)
   ) +
+  ggplot2::coord_cartesian(ylim = .fig1_ylim, clip = "off") +
   ggplot2::labs(x = "Condition", caption = .form_mark_note) +
   theme_clean() +
   ggplot2::theme(
@@ -324,7 +330,7 @@ df_period <- dat |>
                                 levels = c("Period 1", "Period 2")))
 
 # =============================================================================
-# FIGURE 4: Period effects by sequence Ã¢â‚¬â€ 2-panel
+# FIGURE 4: Period effects by sequence ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2-panel
 # =============================================================================
 log_h2("Figure 4: Period effects by sequence")
 
@@ -447,7 +453,7 @@ if (!is.null(results$mixed_models$full$model1)) {
   
   save_figure(fig6, "mixed_model_fixed_effects", subfolder = "mixed_models")
 } else {
-  log_warn("Mixed models unavailable Ã¢â‚¬â€ Figure 6 skipped.")
+  log_warn("Mixed models unavailable ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Figure 6 skipped.")
 }
 
 # =============================================================================
@@ -510,7 +516,7 @@ save_figure(fig7, "per_participant_condition_scores",
             subfolder = "supplementary", width = 9, height = 5)
 
 # =============================================================================
-# FIGURE 8: Score distribution Ã¢â‚¬â€ violin + box, all four conditions
+# FIGURE 8: Score distribution ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â violin + box, all four conditions
 # =============================================================================
 log_h2("Figure 8: Distribution violin/box")
 
@@ -595,7 +601,7 @@ if ((length(cfg$item_exclusions$y %||% character(0)) > 0 ||
                                  breaks = score_y_breaks) +
     ggplot2::labs(
       x        = "Condition",
-      subtitle = "Within-run comparison Ã¢â‚¬â€ same data, full vs restricted item scoring"
+      subtitle = "Within-run comparison ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â same data, full vs restricted item scoring"
     ) +
     theme_clean() +
     ggplot2::theme(legend.position = "bottom")
@@ -624,7 +630,7 @@ seq_colors   <- stats::setNames(c(col_seq_ab, col_seq_ba),
 seq_color_labels <- sequence_display_label(names(seq_colors), cfg)
 
 # =============================================================================
-# FIGURE 10: Score delta dotplot (int Ã¢Ë†â€™ ctl, sorted lollipop per participant)
+# FIGURE 10: Score delta dotplot (int ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢ ctl, sorted lollipop per participant)
 # =============================================================================
 log_h2("Figure 10: Score delta dotplot")
 
@@ -715,7 +721,7 @@ if (!is.null(forest_data) && nrow(forest_data) > 0) {
   save_figure(fig11, "effect_size_forest", subfolder = "primary",
               width = 7, height = max(3.5, nrow(forest_data) * 0.8))
 } else {
-  log_warn("No effect size data available Ã¢â‚¬â€ Figure 11 skipped.")
+  log_warn("No effect size data available ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Figure 11 skipped.")
 }
 
 # =============================================================================
@@ -813,7 +819,7 @@ fig13 <- ggplot2::ggplot(df_ecdf,
 save_figure(fig13, "score_ecdf_by_condition", subfolder = "descriptive")
 
 # =============================================================================
-# FIGURE 14: Histogram of within-person score differences (int Ã¢Ë†â€™ ctl)
+# FIGURE 14: Histogram of within-person score differences (int ÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢ ctl)
 # =============================================================================
 log_h2("Figure 14: Score difference histogram")
 
@@ -854,27 +860,27 @@ save_figure(fig14, "score_difference_histogram", subfolder = "descriptive",
             width = 5.5, height = 4.0)
 
 # =============================================================================
-# FIGURE 15: Sequence trajectories (Period 1 Ã¢â€ â€™ 2, group means + individual lines)
+# FIGURE 15: Sequence trajectories (Period 1 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 2, group means + individual lines)
 # =============================================================================
 log_h2("Supporting figures: restricted score and paired-test diagnostics")
 
-.alex <- results$alex_supporting %||% NULL
-.alex_scoring <- .alex$scoring %||% if ("intervention_score_restricted" %in% names(dat)) "restricted" else "full"
-.alex_ai_col <- paste0("intervention_score_", .alex_scoring)
-.alex_noai_col <- paste0("control_score_", .alex_scoring)
+.ref_analysis <- results$reference_analysis %||% NULL
+.ref_analysis_scoring <- .ref_analysis$scoring %||% if ("intervention_score_restricted" %in% names(dat)) "restricted" else "full"
+.ref_analysis_ai_col <- paste0("intervention_score_", .ref_analysis_scoring)
+.ref_analysis_noai_col <- paste0("control_score_", .ref_analysis_scoring)
 
-if (all(c(.alex_ai_col, .alex_noai_col) %in% names(dat))) {
-  .alex_condition_scores <- dplyr::bind_rows(
-    dplyr::transmute(dat, condition = ctl_display, score = .data[[.alex_noai_col]]),
-    dplyr::transmute(dat, condition = int_display, score = .data[[.alex_ai_col]])
+if (all(c(.ref_analysis_ai_col, .ref_analysis_noai_col) %in% names(dat))) {
+  .ref_analysis_condition_scores <- dplyr::bind_rows(
+    dplyr::transmute(dat, condition = ctl_display, score = .data[[.ref_analysis_noai_col]]),
+    dplyr::transmute(dat, condition = int_display, score = .data[[.ref_analysis_ai_col]])
   ) |>
     dplyr::mutate(condition = factor(.data$condition, levels = c(ctl_display, int_display)))
 
-  .hist_range <- diff(range(.alex_condition_scores$score, na.rm = TRUE))
+  .hist_range <- diff(range(.ref_analysis_condition_scores$score, na.rm = TRUE))
   .hist_bw <- if (.hist_range <= 20) 1 else ceiling(.hist_range / 20)
 
-  fig_alex_hist <- ggplot2::ggplot(
-      .alex_condition_scores,
+  fig_ref_hist <- ggplot2::ggplot(
+      .ref_analysis_condition_scores,
       ggplot2::aes(x = .data$score, fill = .data$condition)
     ) +
     ggplot2::geom_histogram(
@@ -894,13 +900,13 @@ if (all(c(.alex_ai_col, .alex_noai_col) %in% names(dat))) {
     theme_clean() +
     ggplot2::theme(legend.position = "bottom")
 
-  save_figure(fig_alex_hist, "condition_score_histogram_restricted",
+  save_figure(fig_ref_hist, "condition_score_histogram_restricted",
               subfolder = "supplementary", width = 6.5, height = 4.5)
 }
 
-if (!is.null(.alex$sign_permutation$paired_differences) &&
-    nrow(.alex$sign_permutation$paired_differences) > 0) {
-  .pdiff <- .alex$sign_permutation$paired_differences |>
+if (!is.null(.ref_analysis$sign_permutation$paired_differences) &&
+    nrow(.ref_analysis$sign_permutation$paired_differences) > 0) {
+  .pdiff <- .ref_analysis$sign_permutation$paired_differences |>
     dplyr::arrange(.data$paired_diff) |>
     dplyr::mutate(
       rank_id = factor(seq_len(dplyr::n())),
@@ -916,7 +922,7 @@ if (!is.null(.alex$sign_permutation$paired_differences) &&
     c(paste0(int_display, " higher"), paste0(ctl_display, " higher"), "Tie")
   )
 
-  fig_alex_diff <- ggplot2::ggplot(
+  fig_ref_diff <- ggplot2::ggplot(
       .pdiff,
       ggplot2::aes(x = .data$paired_diff, y = .data$rank_id)
     ) +
@@ -942,11 +948,11 @@ if (!is.null(.alex$sign_permutation$paired_differences) &&
       axis.ticks.y = ggplot2::element_blank()
     )
 
-  save_figure(fig_alex_diff, "paired_difference_dotplot_restricted",
+  save_figure(fig_ref_diff, "paired_difference_dotplot_restricted",
               subfolder = "supplementary",
               width = 6.5, height = max(4.5, nrow(.pdiff) * 0.32))
 
-  fig_alex_seq_hist <- ggplot2::ggplot(
+  fig_ref_seq_hist <- ggplot2::ggplot(
       .pdiff,
       ggplot2::aes(x = .data$paired_diff, fill = .data$sequence_display)
     ) +
@@ -962,14 +968,14 @@ if (!is.null(.alex$sign_permutation$paired_differences) &&
     theme_clean() +
     ggplot2::theme(legend.position = "bottom")
 
-  save_figure(fig_alex_seq_hist, "sequence_difference_histogram_restricted",
+  save_figure(fig_ref_seq_hist, "sequence_difference_histogram_restricted",
               subfolder = "supplementary", width = 6.5, height = 4.5)
 }
 
-if (!is.null(.alex$sign_permutation$counts) &&
-    nrow(.alex$sign_permutation$counts) > 0) {
+if (!is.null(.ref_analysis$sign_permutation$counts) &&
+    nrow(.ref_analysis$sign_permutation$counts) > 0) {
   .sign_levels <- c(paste0(int_display, " higher"), paste0(ctl_display, " higher"), "Tie")
-  .sign_counts <- .alex$sign_permutation$counts |>
+  .sign_counts <- .ref_analysis$sign_permutation$counts |>
     dplyr::mutate(
       Direction = factor(.data$Direction,
                          levels = .sign_levels)
@@ -996,10 +1002,10 @@ if (!is.null(.alex$sign_permutation$counts) &&
               subfolder = "supplementary", width = 5.8, height = 4)
 }
 
-if (!is.null(.alex$sign_permutation$permutation_distribution) &&
-    nrow(.alex$sign_permutation$permutation_distribution) > 0) {
-  .perm_dist <- .alex$sign_permutation$permutation_distribution
-  .obs_diff <- .alex$sign_permutation$observed_mean_difference %||% NA_real_
+if (!is.null(.ref_analysis$sign_permutation$permutation_distribution) &&
+    nrow(.ref_analysis$sign_permutation$permutation_distribution) > 0) {
+  .perm_dist <- .ref_analysis$sign_permutation$permutation_distribution
+  .obs_diff <- .ref_analysis$sign_permutation$observed_mean_difference %||% NA_real_
 
   fig_perm <- ggplot2::ggplot(
       .perm_dist,
@@ -1102,7 +1108,7 @@ fig16 <- ggplot2::ggplot(df_qq, ggplot2::aes(sample = .data$value)) +
 save_figure(fig16, "normality_qq_differences", subfolder = "supplementary")
 
 # =============================================================================
-# FIGURE 17: LME residual diagnostics (conditional Ã¢â‚¬â€ model must be present)
+# FIGURE 17: LME residual diagnostics (conditional ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â model must be present)
 # =============================================================================
 .lme_model <- results$mixed_models$full$model1 %||% results$mixed_models$model1
 
@@ -1297,7 +1303,7 @@ if (.run_ceil) {
 
 # =============================================================================
 # FIGURE 21: Period-specific intervention effect
-# Shows the within-person IntÃ¢Ë†â€™Ctl difference split by WHEN the intervention
+# Shows the within-person IntÃƒÂ¢Ã‹â€ Ã¢â‚¬â„¢Ctl difference split by WHEN the intervention
 # occurred (Period 1 vs Period 2). A significant difference between the two
 # boxplots means the effect size is moderated by period order.
 # =============================================================================
@@ -1417,7 +1423,7 @@ if ("subgroup4" %in% names(dat)) {
 
 # =============================================================================
 # FIGURE 23: Ceiling / floor by subgroup4
-# Same ceiling/floor plot as Figure 20, but split by 4 subgroups Ã¢â‚¬â€
+# Same ceiling/floor plot as Figure 20, but split by 4 subgroups ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â
 # lets you see whether the ceiling effect is driven by a specific subgroup.
 # =============================================================================
 log_h2("Figure 23: Ceiling/floor by 4 subgroups")
@@ -1476,7 +1482,7 @@ if (.run_ceil && "subgroup4" %in% names(dat)) {
 
 # =============================================================================
 # FIGURE 24: 4-subgroup delta dotplot
-# One lollipop per participant coloured by subgroup Ã¢â‚¬â€ shows whether
+# One lollipop per participant coloured by subgroup ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â shows whether
 # the distribution of Int-minus-Ctl differences clustering by subgroup.
 # =============================================================================
 log_h2("Figure 24: 4-subgroup delta dotplot")
@@ -1520,7 +1526,7 @@ if ("subgroup4" %in% names(dat)) {
 }
 
 # =============================================================================
-# FIGURE 25: 2Ãƒâ€”2 crossover interaction with condition labels on x-axis
+# FIGURE 25: 2ÃƒÆ’Ã¢â‚¬â€2 crossover interaction with condition labels on x-axis
 # Enhances Figure 12 with explicit condition labels showing WHAT was tested
 # in each period for each sequence group.
 # =============================================================================
@@ -1701,7 +1707,7 @@ if (!is.null(.raw_data_27)) {
     lbl_cols <- vapply(ordered_cols, make_lbl, character(1))
 
     # Compute correlation matrix for all items.
-    # Constant items produce NA correlations Ã¢â‚¬â€ handled explicitly below.
+    # Constant items produce NA correlations ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â handled explicitly below.
     all_mat <- as.matrix(dplyr::select(items_df, dplyr::all_of(ordered_cols)))
     storage.mode(all_mat) <- "numeric"
     cmat <- suppressWarnings(cor(all_mat, use = "pairwise.complete.obs"))
@@ -1715,7 +1721,7 @@ if (!is.null(.raw_data_27)) {
         value    = as.vector(cmat),
         on_diag  = .data$row == .data$col,
         # A cell is "constant" when at least one member item is constant
-        # (off-diagonal only Ã¢â‚¬â€ diagonal is always grey regardless).
+        # (off-diagonal only ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â diagonal is always grey regardless).
         is_const = !.data$on_diag &
                      (.data$row %in% const_cols | .data$col %in% const_cols),
         # Fill: NA makes tile grey (via na.value); numeric drives the colour scale.
@@ -1884,7 +1890,7 @@ if (!is.null(.raw_data_27)) {
   .resp_matrix <- function(items_df, cols_full, excl_cols, form_lbl,
                             excl_always = NULL) {
     # excl_always : (optional) subset of excl_cols excluded in ALL comparison
-    #   variants Ã¢â‚¬â€ these receive "**" axis markers.  Remaining excl_cols items
+    #   variants ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â these receive "**" axis markers.  Remaining excl_cols items
     #   receive "*".  When NULL (single-run mode) all excl_cols receive "*".
     #   Mirrors the two-level logic in .corr_heatmap().
     .num_ord <- suppressWarnings(as.numeric(sub("^[xy]", "", cols_full)))
@@ -1924,7 +1930,7 @@ if (!is.null(.raw_data_27)) {
     n_p    <- length(.part_ord)
     ytxt   <- max(5L, 9L - n_p %/% 4L)
 
-    # Caption Ã¢â‚¬â€ two-level when excl_always provided and both sets non-empty.
+    # Caption ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â two-level when excl_always provided and both sets non-empty.
     .cap28 <- if (.two28) {
       paste0("** excluded in both restricted variants\n",
              "*  excluded only in the stricter restricted variant")
@@ -2067,7 +2073,7 @@ if (!is.null(.raw_data_27)) {
     )
   has_excl29     <- length(.raw_data_27$x_excluded) > 0 ||
                     length(.raw_data_27$y_excluded) > 0
-  # Two-level caption for Figure 29 Ã¢â‚¬â€ combine X and Y exclusion contexts.
+  # Two-level caption for Figure 29 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â combine X and Y exclusion contexts.
   .ea29_x <- if (!is.null(.excl_always_x_env)) .excl_always_x_env else character(0)
   .ea29_y <- if (!is.null(.excl_always_y_env)) .excl_always_y_env else character(0)
   .es29_x <- setdiff(.raw_data_27$x_excluded, .ea29_x)
@@ -2424,3 +2430,4 @@ local({
 }
 
 log_h2("FIGURES COMPLETE")
+

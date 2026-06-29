@@ -4,7 +4,7 @@
 ## Writes AUDIT.csv and AUDIT.md to the output root of a pipeline run or
 ## comparison run.
 ## Sourced from run_all.R (regular runs) and 08_comparison_figures.R (comparison).
-## Copyright (c) 2026 Aidan Sauls — see LICENSE for terms.
+## Copyright (c) 2026 Aidan Sauls â€” see LICENSE for terms.
 ## =============================================================================
 
 local({
@@ -23,7 +23,7 @@ local({
   } else {
     .sn <- Sys.getenv("STUDY_NAME", unset = "")
     if (!nzchar(.sn)) {
-      message("[AUDIT] Cannot resolve study name — skipping.")
+      message("[AUDIT] Cannot resolve study name â€” skipping.")
       return(invisible(NULL))
     }
     .name <- .sn
@@ -31,7 +31,7 @@ local({
   }
 
   if (!dir.exists(.dir)) {
-    message("[AUDIT] Output directory not found: ", .dir, " — skipping.")
+    message("[AUDIT] Output directory not found: ", .dir, " â€” skipping.")
     return(invisible(NULL))
   }
 
@@ -51,7 +51,7 @@ local({
   }
 
   # ---------------------------------------------------------------------------
-  # Registry: known file stem → (desc, scoring, role, note)
+  # Registry: known file stem â†’ (desc, scoring, role, note)
   #
   # scoring: Full | Restricted | Full+Restricted | Cross-run | N/A
   # role:    Core | Secondary | Descriptive | Exploratory |
@@ -69,9 +69,9 @@ local({
     "lme_residual_diagnostic"                 = list(desc = "LME residual diagnostics: QQ + fitted-vs-residual",                    scoring = "Full",            role = "Secondary",     note = ""),
     "per_participant_condition_scores"        = list(desc = "Per-participant condition score profiles",                              scoring = "Full",            role = "Supplementary", note = ""),
     "score_distributions_violin_box"          = list(desc = "Score distributions (violin + box) by condition",                      scoring = "Full",            role = "Descriptive",   note = ""),
-    "condition_score_histogram_restricted"    = list(desc = "Restricted score histograms by condition",                              scoring = "Restricted",      role = "Supplementary", note = "Alex-style supporting figure"),
-    "sequence_difference_histogram_restricted"= list(desc = "Restricted paired differences by sequence order",                       scoring = "Restricted",      role = "Supplementary", note = "Alex-style supporting figure"),
-    "paired_difference_dotplot_restricted"    = list(desc = "Restricted participant-level AI-assisted minus No-AI differences",      scoring = "Restricted",      role = "Supplementary", note = "Alex-style supporting figure"),
+    "condition_score_histogram_restricted"    = list(desc = "Restricted score histograms by condition",                              scoring = "Restricted",      role = "Supplementary", note = "Reference supporting figure"),
+    "sequence_difference_histogram_restricted"= list(desc = "Restricted paired differences by sequence order",                       scoring = "Restricted",      role = "Supplementary", note = "Reference supporting figure"),
+    "paired_difference_dotplot_restricted"    = list(desc = "Restricted participant-level AI-assisted minus No-AI differences",      scoring = "Restricted",      role = "Supplementary", note = "Reference supporting figure"),
     "sign_test_counts_restricted"             = list(desc = "Sign-test direction counts for restricted paired differences",          scoring = "Restricted",      role = "Supplementary", note = "Supporting sign test"),
     "paired_permutation_null_restricted"      = list(desc = "Paired sign-flip permutation null distribution",                       scoring = "Restricted",      role = "Supplementary", note = "Supporting permutation test"),
     "score_distributions_by_form"             = list(desc = "Score distributions by form (X vs Y)",                                scoring = "Full",            role = "Descriptive",   note = ""),
@@ -88,8 +88,8 @@ local({
     # Tables
     "01_participant_flow"                 = list(desc = "Participant flow and sequence allocation",                        scoring = "N/A",             role = "Descriptive",   note = ""),
     "02_descriptive_statistics"           = list(desc = "Descriptive statistics by condition and period",                 scoring = "Full",            role = "Descriptive",   note = ""),
-    "02b_condition_descriptives_restricted" = list(desc = "Restricted descriptive summary: AI-assisted vs No-AI",          scoring = "Restricted",      role = "Descriptive",   note = "Alex-style supporting table"),
-    "02c_sequence_descriptives_restricted"  = list(desc = "Restricted descriptive summary by sequence order",              scoring = "Restricted",      role = "Descriptive",   note = "Alex-style supporting table"),
+    "02b_condition_descriptives_restricted" = list(desc = "Restricted descriptive summary: AI-assisted vs No-AI",          scoring = "Restricted",      role = "Descriptive",   note = "Reference supporting table"),
+    "02c_sequence_descriptives_restricted"  = list(desc = "Restricted descriptive summary by sequence order",              scoring = "Restricted",      role = "Descriptive",   note = "Reference supporting table"),
     "03_primary_contrasts"                = list(desc = "Paired contrasts: intervention + period effects",                scoring = "Full+Restricted", role = "Core",          note = ""),
     "04a_carryover_test"                  = list(desc = "Grizzle carryover test",                                         scoring = "Full",            role = "Secondary",     note = ""),
     "04b_sequence_period_interaction"     = list(desc = "Sequence x period interaction",                                  scoring = "Full",            role = "Secondary",     note = ""),
@@ -104,17 +104,17 @@ local({
     "10a_sign_permutation_tests"           = list(desc = "Exact sign test and paired sign-flip permutation test",          scoring = "Restricted",      role = "Supplementary", note = "Supporting nonparametric analyses"),
     "11_ceiling_effects"                  = list(desc = "Ceiling effects analysis",                                       scoring = "Full",            role = "Supplementary", note = ""),
     "12_model_comparison"                 = list(desc = "LME model comparison (full vs reduced)",                        scoring = "Full",            role = "Exploratory",   note = ""),
-    "13_full_vs_restricted_comparison"    = list(desc = "Within-run: full vs restricted scoring — means, SDs, r",        scoring = "Full+Restricted", role = "Supplementary", note = "Within-run comparison only"),
+    "13_full_vs_restricted_comparison"    = list(desc = "Within-run: full vs restricted scoring â€” means, SDs, r",        scoring = "Full+Restricted", role = "Supplementary", note = "Within-run comparison only"),
     "13b_full_vs_restricted_effect_sizes" = list(desc = "Within-run: Cohen's dz under full vs restricted scoring",       scoring = "Full+Restricted", role = "Supplementary", note = "Within-run comparison only"),
     "20_post_hoc_power_analysis"          = list(desc = "Post-hoc paired-test sample sizes by target effect",            scoring = "Restricted",      role = "Supplementary", note = "Uses restricted AI minus No-AI paired differences"),
     # Comparison outputs
     "variant_comparison_restricted_results"             = list(desc = "Cross-run restricted-score summary (all compared variants)",       scoring = "Restricted",      role = "Cross-run",   note = "Core cross-run comparison"),
     "variant_comparison_full_vs_restricted"             = list(desc = "Cross-run: Cohen dz under full vs restricted scoring, per variant", scoring = "Full+Restricted", role = "Cross-run",   note = "Core cross-run comparison"),
-    "variant_comparison_period_effect"                  = list(desc = "Cross-run: Period effect (P2 − P1) under restricted scoring",        scoring = "Restricted",      role = "Cross-run",   note = "Period contrast + mixed-model corroboration"),
+    "variant_comparison_period_effect"                  = list(desc = "Cross-run: Period effect (P2 âˆ’ P1) under restricted scoring",        scoring = "Restricted",      role = "Cross-run",   note = "Period contrast + mixed-model corroboration"),
     "variant_comparison_period_cell_means"              = list(desc = "Cross-run: Period 1/2 cell means by sequence group",               scoring = "Restricted",      role = "Cross-run",   note = "Descriptive cross-run"),
-    "variant_comparison_condition_by_sequence"          = list(desc = "Cross-run: AI vs Control means within each sequence group (descriptive)",   scoring = "Restricted",      role = "Cross-run",   note = "Descriptive within-person contrast by group — no inferential statistics"),
-    "variant_comparison_condition_by_sequence_inferential" = list(desc = "Cross-run: within-subject AI vs Control paired contrasts by sequence group", scoring = "Restricted",      role = "Cross-run",   note = "Within-subject paired contrasts only — NOT a between-group or moderation test"),
-    "variant_comparison_period_by_sequence"             = list(desc = "Cross-run: within-subject P2 − P1 period effect by sequence group",            scoring = "Restricted",      role = "Cross-run",   note = "Within-subject paired contrasts only — NOT a between-group or moderation test"),
+    "variant_comparison_condition_by_sequence"          = list(desc = "Cross-run: AI vs Control means within each sequence group (descriptive)",   scoring = "Restricted",      role = "Cross-run",   note = "Descriptive within-person contrast by group â€” no inferential statistics"),
+    "variant_comparison_condition_by_sequence_inferential" = list(desc = "Cross-run: within-subject AI vs Control paired contrasts by sequence group", scoring = "Restricted",      role = "Cross-run",   note = "Within-subject paired contrasts only â€” NOT a between-group or moderation test"),
+    "variant_comparison_period_by_sequence"             = list(desc = "Cross-run: within-subject P2 âˆ’ P1 period effect by sequence group",            scoring = "Restricted",      role = "Cross-run",   note = "Within-subject paired contrasts only â€” NOT a between-group or moderation test"),
     # variant_comparison_EXPLORATORY_sequence_moderation intentionally not generated.
     # The period-specific / between-sequence table (Table 15) is suppressed from
     # the comparison package. See 08_comparison_figures.R section 8d comment.
@@ -401,7 +401,7 @@ local({
                     ", expected=", .expected_power_label, "."))
   }
 
-  .log_tbl <- .results$alex_supporting$logistic_models$table %||% NULL
+  .log_tbl <- .results$reference_analysis$logistic_models$table %||% NULL
   if (!is.null(.log_tbl) && nrow(.log_tbl) > 0) {
     .bad_period_wording <- any(
       grepl("period_fac", .log_tbl$Formula, ignore.case = TRUE) &
@@ -495,8 +495,8 @@ local({
     paste0("- Score formula: ", .score_meta$formula$score_prop %||% "correct_included / n_items_included",
            "; score = score_prop * ", .score_meta$scale_to %||% NA),
     paste0("- Score metric: ", .score_meta$primary_label %||% NA),
-    paste0("- Primary score variable: intervention_score_", .results$alex_supporting$scoring %||% "restricted",
-           " and control_score_", .results$alex_supporting$scoring %||% "restricted"),
+    paste0("- Primary score variable: intervention_score_", .results$reference_analysis$scoring %||% "restricted",
+           " and control_score_", .results$reference_analysis$scoring %||% "restricted"),
     "- Paired difference definition: AI-assisted minus No-AI",
     paste0("- Target power: ", .power$target_power %||% NA,
            " (", .power$target_power_label %||% NA, "); alpha = ", .power$alpha %||% NA),
@@ -527,3 +527,4 @@ local({
   cat("  Run audit folder  -> run_audit/\n")
   cat(strrep("-", 72), "\n")
 })
+

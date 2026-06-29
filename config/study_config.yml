@@ -74,6 +74,14 @@ power_analysis:
   max_n: null
 
 # -----------------------------------------------------------------------------
+# Neutral reference-analysis style exports for manuscript-selected outputs.
+# -----------------------------------------------------------------------------
+reference_analysis:
+  enabled: true
+  output_label: "Reference-analysis style"
+  output_prefix: "reference"
+
+# -----------------------------------------------------------------------------
 # Display-only labels. These do not change analysis coding.
 # -----------------------------------------------------------------------------
 display_labels:

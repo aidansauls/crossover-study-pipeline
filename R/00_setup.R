@@ -161,6 +161,11 @@ read_config <- function() {
       target_effects_pct = c(5, 8, 10, 12, 15, 20),
       max_n = NULL
     ),
+    reference_analysis = list(
+      enabled = TRUE,
+      output_label = "Reference-analysis style",
+      output_prefix = "reference"
+    ),
     display_labels = list(
       condition_control = "No-AI",
       condition_ai = "AI-assisted",
@@ -734,6 +739,43 @@ theme_clean <- function(base_size = NULL, base_family = NULL) {
       # Margins
       plot.margin = margin(10, 12, 10, 12)
     )
+}
+
+score_zoom_limits_percent <- function(scores, pad = 5, step = 10, min_span = 40) {
+  scores <- scores[is.finite(scores)]
+
+  if (length(scores) == 0) {
+    return(c(0, 100))
+  }
+
+  lo <- floor((min(scores) - pad) / step) * step
+  hi <- ceiling((max(scores) + pad) / step) * step
+
+  lo <- max(0, lo)
+  hi <- min(100, hi)
+
+  if ((hi - lo) < min_span) {
+    mid <- mean(range(scores))
+    lo <- floor((mid - min_span / 2) / step) * step
+    hi <- ceiling((mid + min_span / 2) / step) * step
+    lo <- max(0, lo)
+    hi <- min(100, hi)
+  }
+
+  c(lo, hi)
+}
+
+score_zoom_limits_common <- function(scores, scale_to = 10, pad = 5,
+                                     step = 10, min_span = 40) {
+  scale_to <- as.numeric(scale_to %||% 10)
+  if (!is.finite(scale_to) || scale_to <= 0) scale_to <- 10
+
+  score_zoom_limits_percent(
+    scores / scale_to * 100,
+    pad = pad,
+    step = step,
+    min_span = min_span
+  ) / 100 * scale_to
 }
 
 #' Config-aware condition colors

@@ -424,6 +424,16 @@ if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
   .obs_mean <- mean(.diff, na.rm = TRUE)
   .diff_clean <- .diff[!is.na(.diff)]
   .n_perm <- length(.diff_clean)
+  .perm_assignment_note <- if (.n_perm <= 20) {
+    paste0(
+      "Exact Fisher-Pitman sign-flip permutation test over ",
+      "2^", .n_perm, " = ",
+      format(2^.n_perm, big.mark = ",", scientific = FALSE),
+      " sign assignments."
+    )
+  } else {
+    "Monte Carlo Fisher-Pitman sign-flip permutation test with 100000 sign assignments."
+  }
   if (.n_perm > 0 && .n_perm <= 20) {
     .abs_diff <- abs(.diff_clean)
     .sign_mat <- expand.grid(rep(list(c(-1, 1)), .n_perm))
@@ -451,9 +461,10 @@ if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
       n = c(.n_improved, .n_worsened, .n_tied)
     ),
     table = tibble::tibble(
-      Test = c("Exact sign test", "Paired sign-flip permutation test"),
+      Test = c("Exact sign test", "Fisher-Pitman permutation test (two-sided)"),
       `Difference definition` = paste0(int_display, " minus ", ctl_display),
-      N = c(.n_nonzero, .n_perm),
+      N = c(.n_perm, .n_perm),
+      `Non-tied n` = c(.n_nonzero, NA_integer_),
       Statistic = c(
         paste0(.n_improved, " improved, ", .n_worsened, " worsened, ", .n_tied, " tied"),
         paste0("Observed mean difference = ", round(.obs_mean, 4))
@@ -461,8 +472,7 @@ if (!all(c(.primary_ai_col, .primary_noai_col) %in% names(dat))) {
       p = c(.sign_p, .perm_p),
       Notes = c(
         "Two-sided exact binomial sign test excludes ties.",
-        if (.n_perm <= 20) "Exact sign-flip test over all 2^N sign assignments."
-        else "Monte Carlo sign-flip test with 100000 sign assignments."
+        .perm_assignment_note
       )
     ),
     permutation_distribution = .perm_dist,
@@ -495,7 +505,7 @@ if (.fit_logistic_models && !is.null(raw_data) && requireNamespace("lme4", quiet
       ) |>
       dplyr::mutate(
         form_code = form_code,
-        question_id = paste0(.data$form_code, "_", toupper(.data$item_raw)),
+        item_id = paste0(.data$form_code, "_", toupper(.data$item_raw)),
         correct_binary = as.integer(.data$correct_binary)
       )
   }
@@ -545,7 +555,7 @@ if (.fit_logistic_models && !is.null(raw_data) && requireNamespace("lme4", quiet
           )
         ),
         participant_id = factor(.data$participant),
-        question_id = factor(.data$question_id)
+        item_id = factor(.data$item_id)
       ) |>
       dplyr::filter(!is.na(.data$correct_binary))
 
@@ -577,17 +587,17 @@ if (.fit_logistic_models && !is.null(raw_data) && requireNamespace("lme4", quiet
 
       .log_models <- list(
         condition = .fit_glmer(
-          correct_binary ~ condition_fac + (1 | participant_id) + (1 | question_id),
+          correct_binary ~ condition_fac + (1 | participant_id) + (1 | item_id),
           "Model A: item-level condition model",
           paste0("Estimates ", int_display, " vs ", ctl_display, " odds of a correct response.")
         ),
         period = .fit_glmer(
-          correct_binary ~ period_fac + (1 | participant_id) + (1 | question_id),
+          correct_binary ~ period_fac + (1 | participant_id) + (1 | item_id),
           "Model B: item-level period model",
           "Estimates Period 2 vs Period 1 odds of a correct response."
         ),
         sequence = .fit_glmer(
-          correct_binary ~ sequence_fac + (1 | participant_id) + (1 | question_id),
+          correct_binary ~ sequence_fac + (1 | participant_id) + (1 | item_id),
           "Model C: item-level sequence-group model",
           paste0("Estimates ", int_display, "-first sequence vs ", ctl_display,
                  "-first sequence odds of a correct response.")

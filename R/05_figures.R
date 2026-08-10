@@ -104,9 +104,9 @@ spaghetti_layer <- function(df, x_col, y_col, group_col, id_col,
 }
 
 # =============================================================================
-# FIGURE 1: Intervention vs Control ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â paired spaghetti
+# FIGURE 1: AI-assisted vs No-AI paired slope plot
 # =============================================================================
-log_h2("Figure 1: Intervention vs Control (paired spaghetti)")
+log_h2("Figure 1: AI-assisted vs No-AI paired slope plot")
 
 .seq_ctl_raw_fig1 <- paste0(ctl_label, "-first")
 .seq_int_raw_fig1 <- paste0(int_label, "-first")
@@ -184,22 +184,32 @@ group_means_int <- df_int |>
   )
 .fig1_ylim <- score_zoom_limits_common(df_int$score, scale_to = scale_to)
 .fig1_noai_mean <- group_means_int$mean[group_means_int$condition_x == 1][1]
-
-.form_mark_jitter <- ggplot2::position_jitter(width = 0.06, height = 0, seed = 20260629)
-.form_mark_note <- paste(
-  "Letters indicate which post-test form was administered at each score:",
-  "X = Form X, Y = Form Y."
+.fig1_diff <- dat[[.fig1_int_col]] - dat[[.fig1_ctl_col]]
+.fig1_diff <- .fig1_diff[is.finite(.fig1_diff)]
+.fig1_diff_ci <- if (length(.fig1_diff) > 1L && stats::sd(.fig1_diff) > 0) {
+  stats::t.test(dat[[.fig1_int_col]], dat[[.fig1_ctl_col]], paired = TRUE)$conf.int
+} else {
+  rep(mean(.fig1_diff, na.rm = TRUE), 2L)
+}
+.fig1_wedge <- data.frame(
+  condition_x = c(1, 2, 2),
+  score = c(
+    .fig1_noai_mean,
+    .fig1_noai_mean + .fig1_diff_ci[1],
+    .fig1_noai_mean + .fig1_diff_ci[2]
+  )
 )
+
+.fig1_labels_left <- dplyr::filter(df_int, .data$condition_x == 1)
+.fig1_labels_right <- dplyr::filter(df_int, .data$condition_x == 2)
 
 fig1 <- ggplot2::ggplot(df_int,
               ggplot2::aes(x = .data$condition_x, y = .data$score)) +
   ggplot2::geom_hline(yintercept = .fig1_noai_mean, linetype = "dotted",
                       colour = "grey65", linewidth = 0.45) +
-  ggplot2::geom_ribbon(
-    data = group_means_int,
-    ggplot2::aes(x = .data$condition_x,
-                 ymin = .data$mean - .data$ci,
-                 ymax = .data$mean + .data$ci),
+  ggplot2::geom_polygon(
+    data = .fig1_wedge,
+    ggplot2::aes(x = .data$condition_x, y = .data$score),
     inherit.aes = FALSE,
     fill = "grey45",
     alpha = 0.12
@@ -208,12 +218,47 @@ fig1 <- ggplot2::ggplot(df_int,
     ggplot2::aes(group = .data$participant, colour = .data$sequence_display),
     linewidth = 0.4, alpha = 0.35, show.legend = TRUE
   ) +
-  ggplot2::geom_text(
+  ggrepel::geom_text_repel(
+    data = .fig1_labels_left,
     ggplot2::aes(label = .data$test, colour = .data$sequence_display),
-    position = .form_mark_jitter,
-    size = 3.2,
+    nudge_x = -0.16,
+    direction = "y",
+    xlim = c(0.76, 0.88),
+    hjust = 1,
+    size = 2.9,
     fontface = "bold",
-    alpha = 0.65,
+    alpha = 0.75,
+    box.padding = 0.12,
+    point.padding = 0.05,
+    min.segment.length = 0,
+    segment.size = 0.22,
+    segment.alpha = 0.35,
+    force = 0.9,
+    force_pull = 0.08,
+    seed = 20260629,
+    max.overlaps = Inf,
+    na.rm = TRUE,
+    show.legend = FALSE
+  ) +
+  ggrepel::geom_text_repel(
+    data = .fig1_labels_right,
+    ggplot2::aes(label = .data$test, colour = .data$sequence_display),
+    nudge_x = 0.16,
+    direction = "y",
+    xlim = c(2.12, 2.24),
+    hjust = 0,
+    size = 2.9,
+    fontface = "bold",
+    alpha = 0.75,
+    box.padding = 0.12,
+    point.padding = 0.05,
+    min.segment.length = 0,
+    segment.size = 0.22,
+    segment.alpha = 0.35,
+    force = 0.9,
+    force_pull = 0.08,
+    seed = 20260629,
+    max.overlaps = Inf,
     na.rm = TRUE,
     show.legend = FALSE
   ) +
@@ -236,7 +281,7 @@ fig1 <- ggplot2::ggplot(df_int,
   ) +
   ggplot2::scale_colour_manual(
     values = .seq_cols_fig1,
-    name = "Sequence"
+    name = "Randomized sequence"
   ) +
   ggplot2::guides(
     colour = ggplot2::guide_legend(
@@ -255,14 +300,14 @@ fig1 <- ggplot2::ggplot(df_int,
     breaks = c(1, 2),
     labels = c(ctl_short_label, int_short_label)
   ) +
-  ggplot2::coord_cartesian(ylim = .fig1_ylim, clip = "off") +
-  ggplot2::labs(x = "Condition", caption = .form_mark_note) +
+  ggplot2::coord_cartesian(xlim = c(0.72, 2.28), ylim = .fig1_ylim, clip = "off") +
+  ggplot2::labs(x = "Condition") +
   theme_clean() +
   ggplot2::theme(
-    legend.position = "bottom",
-    plot.caption = ggplot2::element_text(size = 8, colour = "grey35", hjust = 0)
+    legend.position = "bottom"
   )
 
+save_figure(fig1, "ai_assisted_vs_noai_paired", subfolder = "primary")
 save_figure(fig1, "intervention_vs_control_paired", subfolder = "primary")
 
 # =============================================================================
@@ -749,8 +794,9 @@ if (!is.null(.power_res) && !is.null(.power_res$curve) &&
     )
 
   .legend_title12 <- paste0(
-    "Target effect (N for ", .power_res$target_power_label, " power)"
+    "Target difference (N for ", .power_res$target_power_label, " power)"
   )
+  .observed_n12 <- as.numeric(.power_res$n_pairs %||% nrow(dat))
 
   fig12 <- ggplot2::ggplot(
       .curve12,
@@ -763,12 +809,29 @@ if (!is.null(.power_res) && !is.null(.power_res$curve) &&
       colour = "grey35",
       linewidth = 0.6
     ) +
+    ggplot2::geom_vline(
+      xintercept = .observed_n12,
+      linetype = "dashed",
+      colour = "grey35",
+      linewidth = 0.6
+    ) +
     ggplot2::geom_line(linewidth = 0.85) +
     ggplot2::geom_point(
       data = .line_dat12,
       ggplot2::aes(x = .data$n_for_target_power, y = .data$power),
       size = 2.2,
       show.legend = FALSE
+    ) +
+    ggplot2::annotate(
+      "text",
+      x = .observed_n12 + 1.2,
+      y = 0.08,
+      label = paste0("Observed sample (n = ", .observed_n12, ")"),
+      angle = 90,
+      hjust = 0,
+      vjust = 0.5,
+      colour = "grey25",
+      size = 3.2
     ) +
     ggplot2::scale_y_continuous(
       name = "Power",
@@ -840,7 +903,6 @@ fig14 <- ggplot2::ggplot(dat_diff14, ggplot2::aes(x = .data$delta)) +
                       colour = "grey40",    linewidth = 0.6) +
   ggplot2::geom_vline(xintercept = mean_d14, linetype = "solid",
                       colour = col_ctl,     linewidth = 0.9) +
-  ggplot2::labs(caption = paste0("N\u202f=\u202f", n_diff14)) +
   ggplot2::scale_x_continuous(
     name = paste0(int_label, " \u2212 ", ctl_label, " (score difference)")
   ) +
@@ -960,7 +1022,8 @@ if (!is.null(.ref_analysis$sign_permutation$paired_differences) &&
                             position = "identity", colour = "white", linewidth = 0.25) +
     ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
                         colour = "grey45", linewidth = 0.55) +
-    ggplot2::scale_fill_manual(values = .seq_cols_fig1, name = "Sequence") +
+    ggplot2::scale_fill_manual(values = .seq_cols_fig1,
+                               name = "Randomized sequence") +
     ggplot2::scale_x_continuous(
       name = paste0(int_display, " - ", ctl_display, " (score difference)")
     ) +
@@ -1015,12 +1078,24 @@ if (!is.null(.ref_analysis$sign_permutation$permutation_distribution) &&
                             colour = "white", linewidth = 0.25) +
     ggplot2::geom_vline(xintercept = 0, linetype = "dashed",
                         colour = "grey40", linewidth = 0.55) +
-    ggplot2::geom_vline(xintercept = c(-abs(.obs_diff), abs(.obs_diff)),
+    ggplot2::geom_vline(xintercept = -abs(.obs_diff),
+                        colour = col_int, linetype = "dotted", linewidth = 0.75) +
+    ggplot2::geom_vline(xintercept = .obs_diff,
                         colour = col_int, linewidth = 0.75) +
-    ggplot2::scale_x_continuous(
-      name = paste0("Permuted mean difference (", int_display, " - ", ctl_display, ")")
+    ggplot2::annotate(
+      "text",
+      x = .obs_diff,
+      y = Inf,
+      label = "Observed mean difference",
+      vjust = 1.5,
+      hjust = ifelse(.obs_diff >= 0, 1.05, -0.05),
+      colour = col_int,
+      size = 3.2
     ) +
-    ggplot2::scale_y_continuous(name = "Permutation count") +
+    ggplot2::scale_x_continuous(
+      name = paste0("Null mean difference (", int_display, " - ", ctl_display, ")")
+    ) +
+    ggplot2::scale_y_continuous(name = "Null distribution count") +
     theme_clean()
 
   save_figure(fig_perm, "paired_permutation_null_restricted",
@@ -2104,11 +2179,13 @@ if (!is.null(.raw_data_27)) {
     ggplot2::facet_wrap(~ form, ncol = 1, scales = "free_x") +
     ggplot2::scale_y_continuous(limits = c(0, 100),
                                 labels = function(x) paste0(x, "%")) +
-    ggplot2::scale_fill_manual(values = .seq_cols29, name = "Sequence order") +
+    ggplot2::scale_fill_manual(values = .seq_cols29, name = "Randomized sequence") +
     ggplot2::labs(
       x       = NULL,
       y       = "% Correct",
-      caption = .cap29
+      title   = NULL,
+      subtitle = NULL,
+      caption = NULL
     ) +
     theme_clean() +
     ggplot2::theme(
@@ -2160,7 +2237,7 @@ log_h2("Figure S1: Participant flow diagram")
 .s1_p2_ctl_lbl  <- .fd$period2_control_label   %||% gsub(" \\(", "\n(", .s1_cond_ctl)
 .s1_p2_int_lbl  <- .fd$period2_ai_label        %||% gsub(" \\(", "\n(", .s1_cond_int)
 .s1_setup_label <- .fd$setup_label %||%
-  "Participants (n = {n}) completed lecture + AI guidance,\nthen were randomized to sequence order"
+  "Participants (n = {n}) completed lecture + AI guidance,\nthen were assigned to randomized sequence"
 .s1_setup_label <- gsub("\\{n\\}", .n_s1, .s1_setup_label)
 .s1_output_file <- .fd$output_filename %||% "figure_s1_participant_flow.png"
 

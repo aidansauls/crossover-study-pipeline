@@ -120,8 +120,8 @@ figures:
   x_axis_form_label: "Test Form"
 
   # Extra colors (sequence groups, individual forms)
-  color_seq_ab: "#2E8B57"     # Intervention-first sequence line color
-  color_seq_ba: "#8B4513"     # Control-first sequence line color
+  color_seq_ab: "#2E8B57"     # AI-assisted-first sequence line color
+  color_seq_ba: "#8B4513"     # No-AI-first sequence line color
   color_form_x: "#4682B4"     # Form X specific color (used in form comparison plots)
   color_form_y: "#B22222"     # Form Y specific color
 
@@ -150,9 +150,9 @@ flow_diagram:
   width_in: 7.5
   height_in: 5.0
   dpi: 300
-  setup_label: "Participants (n = {n}) completed lecture + AI guidance,\nthen were randomized to sequence order"
-  control_sequence_label: "Control-first"
-  ai_sequence_label: "AI-first"
+  setup_label: "Participants (n = {n}) completed lecture + AI guidance, \n then were assigned to randomized sequence"
+  control_sequence_label: "No-AI first"
+  ai_sequence_label: "AI-assisted first"
   period1_control_label: "No-AI study (20 min)"
   period1_ai_label: "AI-assisted study (20 min)"
   control_short_label: "No-AI study (20 min)"

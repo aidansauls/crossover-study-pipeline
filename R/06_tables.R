@@ -160,7 +160,7 @@ if (!is.null(.ref_analysis$sequence_descriptives) &&
     nrow(.ref_analysis$sequence_descriptives) > 0) {
   tbl2c <- .ref_analysis$sequence_descriptives |>
     dplyr::transmute(
-      `Sequence order` = .data$sequence_display,
+      `Randomized sequence` = .data$sequence_display,
       N = .data$n,
       `AI-assisted M (SD)` = sprintf("%.2f (%.2f)",
                                      .data$`AI-assisted mean`,
@@ -176,9 +176,10 @@ if (!is.null(.ref_analysis$sequence_descriptives) &&
     tbl2c,
     "02c_sequence_descriptives_restricted",
     subfolder = "descriptive",
-    caption = paste0("Restricted-score descriptive summary by sequence order"),
+    caption = paste0("Restricted-score descriptive summary by randomized sequence"),
     notes = c(score_note, paste0("Paired difference = ", int_display,
-                                 " minus ", ctl_display, "."))
+                                 " minus ", ctl_display, "."),
+              "Scores and paired differences use the rescaled 0-10 metric.")
   )
 } else {
   log_line("Table 2c skipped: Reference sequence descriptives unavailable")
@@ -556,8 +557,10 @@ if (!is.null(.ref_analysis$logistic_models$table) &&
       Estimate = .data$`Log-odds estimate`,
       SE = .data$SE,
       OR = .data$OR,
-      `OR 95% CI` = sprintf("[%.3f, %.3f]",
-                            .data$`OR CI low`, .data$`OR CI high`),
+      `Odds ratio (95% CI)` = sprintf("%.3f [%.3f, %.3f]",
+                                      .data$OR,
+                                      .data$`OR CI low`,
+                                      .data$`OR CI high`),
       z = .data$z,
       p = vapply(.data$p, fmt_p, character(1)),
       Interpretation = .data$Interpretation
@@ -630,34 +633,43 @@ if (!is.null(tbl8) && nrow(tbl8) > 0) {
 log_h2("Table 8b: Paired difference/effect-size summary")
 
 if (!is.null(.ref_analysis$paired_effect) && nrow(.ref_analysis$paired_effect) > 0) {
+  .to_pp_tbl8b <- function(x) as.numeric(x) / scale_to * 100
   tbl8b <- .ref_analysis$paired_effect |>
     dplyr::transmute(
       Scoring = .data$scoring,
-      `Score metric` = .data$score_metric,
-      Comparison = .data$comparison,
+      `Score metric` = "Percent correct",
+      Comparison = paste0(int_display, " minus ", ctl_display, " paired contrast"),
       N = .data$n,
-      `AI-assisted M (SD)` = sprintf("%.2f (%.2f)",
-                                     .data$`AI-assisted mean`,
-                                     .data$`AI-assisted SD`),
-      `No-AI M (SD)` = sprintf("%.2f (%.2f)",
-                               .data$`No-AI mean`,
-                               .data$`No-AI SD`),
-      `Mean paired difference` = .data$`Mean paired difference`,
-      `95% CI` = fmt_ci(.data$`95% CI low`, .data$`95% CI high`),
+      `AI-assisted M (%)` = sprintf("%.1f (%.1f)",
+                                    .to_pp_tbl8b(.data$`AI-assisted mean`),
+                                    .to_pp_tbl8b(.data$`AI-assisted SD`)),
+      `No-AI M (%)` = sprintf("%.1f (%.1f)",
+                              .to_pp_tbl8b(.data$`No-AI mean`),
+                              .to_pp_tbl8b(.data$`No-AI SD`)),
+      `Mean paired difference (pp)` = round(
+        .to_pp_tbl8b(.data$`Mean paired difference`), 1
+      ),
+      `95% CI for paired difference (pp)` = sprintf(
+        "[%.1f, %.1f]",
+        .to_pp_tbl8b(.data$`95% CI low`),
+        .to_pp_tbl8b(.data$`95% CI high`)
+      ),
       `Cohen dz` = .data$`Cohen dz`,
       `Hedges gz` = .data$`Hedges gz`,
       t = .data$t,
       df = .data$df,
-      p = vapply(.data$p, fmt_p, character(1))
+      p = vapply(.data$p, function(.p) sub("^= ", "", fmt_p(.p)), character(1))
     )
 
   save_table(
     tbl8b,
     "08b_paired_difference_effect_size",
     subfolder = "primary",
-    caption = paste0("Restricted paired difference and effect-size summary: ",
-                     int_display, " minus ", ctl_display),
-    notes = c(score_note, "Hedges gz is Cohen dz with the small-sample correction applied.")
+    caption = paste0("Restricted ", int_display, " minus ", ctl_display,
+                     " paired contrast in percentage points"),
+    notes = c(score_note,
+              "Percentage-point values are computed from common-scale restricted scores.",
+              "Hedges gz is Cohen dz with the small-sample correction applied.")
   )
 } else {
   log_line("Table 8b skipped: paired effect summary unavailable")
@@ -719,7 +731,8 @@ if (!is.null(.ref_analysis$sign_permutation$table) &&
     nrow(.ref_analysis$sign_permutation$table) > 0) {
   tbl10a <- .ref_analysis$sign_permutation$table |>
     dplyr::mutate(
-      p = vapply(.data$p, fmt_p, character(1))
+      p = vapply(.data$p, function(.p) sub("^= ", "", fmt_p(.p)),
+                 character(1))
     )
 
   save_table(
@@ -1079,7 +1092,7 @@ if (!is.null(.power_res) && !is.null(.power_res$table) &&
   tbl20 <- .power_res$table |>
     dplyr::mutate(
       `Target effect` = paste0(
-        .data[["Target effect (percentage points)"]], " percentage points"
+        .data[["Target effect (percentage points)"]], " pp"
       ),
       `Power at observed N` = scales::percent(
         .data[["Power at observed N"]],
@@ -1088,7 +1101,7 @@ if (!is.null(.power_res) && !is.null(.power_res$table) &&
     ) |>
     dplyr::rename(!!.n_power_col := n_for_target_power) |>
     dplyr::select(
-      `Target effect`,
+      `Target difference (pp)` = `Target effect`,
       `Target effect (rescaled score units)`,
       `Cohen dz`,
       `Power at observed N`,
@@ -1318,7 +1331,7 @@ if (!is.null(.raw_tbl19)) {
   save_table(tbl19, "19_item_endorsement_rates",
              subfolder = "exploratory",
              caption   = paste0(
-               "Per-item endorsement rates overall and by sequence order (",
+               "Per-item endorsement rates overall and by randomized sequence (",
                cfg$display_labels$sequence_control_first %||% "No-AI first",
                " vs ",
                cfg$display_labels$sequence_ai_first %||% "AI-assisted first",

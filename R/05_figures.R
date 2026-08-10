@@ -2228,8 +2228,8 @@ log_h2("Figure S1: Participant flow diagram")
 .n_ctl_s1 <- sum(dat$intervention_period == 2L, na.rm = TRUE)
 
 .s1_break_dur   <- .fd$break_duration          %||% "10-15 min"
-.s1_seq_ctl_lbl <- .fd$control_sequence_label  %||% "Control-first"
-.s1_seq_int_lbl <- .fd$ai_sequence_label       %||% "AI-first"
+.s1_seq_ctl_lbl <- .fd$control_sequence_label  %||% "No-AI first"
+.s1_seq_int_lbl <- .fd$ai_sequence_label       %||% "AI-assisted first"
 .s1_p1_ctl_lbl  <- .fd$period1_control_label   %||% "No-AI study (20 min)"
 .s1_p1_int_lbl  <- .fd$period1_ai_label        %||% "AI-assisted study (20 min)"
 .s1_cond_ctl    <- .fd$control_short_label     %||% .s1_p1_ctl_lbl

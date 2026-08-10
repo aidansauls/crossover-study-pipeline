@@ -80,7 +80,8 @@ invisible(lapply(
     .sel_root,
     c(
       paste0(intToUtf8(c(97, 108, 101, 120)), "_style_reference"),
-      "reference_style_reference"
+      "reference_style_reference",
+      "supplement/audit"
     )
   ),
   .remove_generated_dir,
@@ -99,14 +100,29 @@ invisible(lapply(
     c(
       "supplement/figures/figure_s7_permutation_null_two_tailed.png",
       "supplement/figures/figure_s8_permutation_null_one_tailed.png",
+      "supplement/figures/figure_s2_post_hoc_power_curve.png",
+      "supplement/figures/figure_s3_condition_score_histogram_restricted.png",
+      "supplement/figures/figure_s4_sequence_difference_histogram_restricted.png",
+      "supplement/figures/figure_s5_paired_difference_histogram.png",
+      "supplement/figures/figure_s6_paired_difference_dotplot_restricted.png",
+      "supplement/figures/figure_s7_permutation_null_two_sided.png",
+      "supplement/figures/figure_s8_permutation_null_one_sided.png",
+      "main_body/figures/figure2_item_endorsement_by_sequence.png",
+      "main_body/figures/figure3_post_hoc_power_curve.png",
       "supplement/tables/table_s2b_permutation_one_tailed.csv",
       "supplement/tables/table_s2b_permutation_one_tailed.png",
       "supplement/tables/table_s2b_permutation_one_sided.csv",
       "supplement/tables/table_s2b_permutation_one_sided.png",
+      "supplement/tables/table_s4_full_descriptive_statistics.csv",
+      "supplement/tables/table_s4_full_descriptive_statistics.png",
       "supplement/tables/table_s5_primary_contrasts_full_and_restricted.csv",
       "supplement/tables/table_s5_primary_contrasts_full_and_restricted.png",
       "supplement/tables/table_s6_item_endorsement_rates.csv",
       "supplement/tables/table_s6_item_endorsement_rates.png",
+      "supplement/tables/table_s6_primary_contrasts_full_and_restricted.csv",
+      "supplement/tables/table_s6_primary_contrasts_full_and_restricted.png",
+      "supplement/tables/table_s7_item_endorsement_rates.csv",
+      "supplement/tables/table_s7_item_endorsement_rates.png",
       "reference_analysis_style/tables/condition_descriptive_table_reference_style.csv",
       "reference_analysis_style/tables/condition_descriptive_table_reference_style.png",
       "reference_analysis_style/figures/permutation_null_two_tailed_reference_style.png",
@@ -124,7 +140,6 @@ invisible(lapply(
     "main_body/tables",
     "supplement/figures",
     "supplement/tables",
-    "supplement/audit",
     "reference_analysis_style/figures",
     "reference_analysis_style/tables"
   )
@@ -436,37 +451,62 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   Notes = c(
     paste0(.sign_ties,
            " ties are excluded from the exact binomial calculation."),
-    paste0("Exact sign-flip enumeration over ",
+    paste0("Exact Fisher-Pitman enumeration over ",
            .perm_assignments_label, " assignments."),
-    paste0("Exploratory one-sided exact sign-flip enumeration over ",
+    paste0("Exploratory one-sided exact Fisher-Pitman enumeration over ",
            .perm_assignments_label, " assignments.")
   ),
   check.names = FALSE
 )
 
-.clean_logistic <- .log_tbl |>
+.log_non_intercept <- .log_tbl |>
   dplyr::filter(.data$Term != "Intercept") |>
   dplyr::mutate(
     Model = dplyr::case_when(
       grepl("condition", .data$Model, ignore.case = TRUE) ~ "Condition model",
       grepl("period", .data$Model, ignore.case = TRUE) ~ "Period model",
       TRUE ~ "Randomized-sequence model"
-    ),
-    Contrast = .data$Term,
-    `Odds ratio (95% CI)` = sprintf("%.3f [%.3f, %.3f]",
-                                    .data$OR,
-                                    .data[["OR CI low"]],
-                                    .data[["OR CI high"]]),
-    z = .fmt3(.data$z),
-    p = vapply(.data$p, .fmt_p, character(1)),
-    Interpretation = gsub("sequence-order", "randomized-sequence",
-                          .data$Interpretation, ignore.case = TRUE)
-  ) |>
-  dplyr::select(
-    "Model", "Contrast", "Odds ratio (95% CI)", "z", "p", "Interpretation"
+    )
   )
 
-.main_table2 <- .clean_logistic
+.glmm_or_tbl <- data.frame(
+  Model = .log_non_intercept$Model,
+  Contrast = .log_non_intercept$Term,
+  `Odds ratio (95% CI)` = sprintf(
+    "%.3f [%.3f, %.3f]",
+    .log_non_intercept$OR,
+    .log_non_intercept[["OR CI low"]],
+    .log_non_intercept[["OR CI high"]]
+  ),
+  z = .fmt3(.log_non_intercept$z),
+  p = vapply(.log_non_intercept$p, .fmt_p, character(1)),
+  Interpretation = gsub(
+    "sequence-order", "randomized-sequence",
+    .log_non_intercept$Interpretation,
+    ignore.case = TRUE
+  ),
+  check.names = FALSE
+)
+
+.main_table2 <- .glmm_or_tbl |>
+  dplyr::select("Model", "Contrast", "Odds ratio (95% CI)", "z", "p")
+
+.log_est <- .log_non_intercept[["Log-odds estimate"]]
+.log_se <- .log_non_intercept$SE
+.supp_glmm_log_odds_tbl <- data.frame(
+  Model = .log_non_intercept$Model,
+  Contrast = .log_non_intercept$Term,
+  `Log-odds estimate` = .fmt3(.log_est),
+  SE = .fmt3(.log_se),
+  `95% CI for log odds` = sprintf(
+    "[%.3f, %.3f]",
+    .log_est - stats::qnorm(0.975) * .log_se,
+    .log_est + stats::qnorm(0.975) * .log_se
+  ),
+  z = .fmt3(.log_non_intercept$z),
+  p = vapply(.log_non_intercept$p, .fmt_p, character(1)),
+  check.names = FALSE
+)
 
 .condition_desc <- .ref_analysis$condition_descriptives
 .to_pct <- function(x) round(as.numeric(x) / .scale_to * 100, 1)
@@ -507,6 +547,27 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   check.names = FALSE
 )
 
+.main_table1b <- data.frame(
+  N = .paired$n,
+  `AI-assisted mean (SD)` = sprintf("%.1f (%.1f)",
+                                    .to_pct(.paired[["AI-assisted mean"]]),
+                                    .to_pct(.paired[["AI-assisted SD"]])),
+  `No-AI mean (SD)` = sprintf("%.1f (%.1f)",
+                              .to_pct(.paired[["No-AI mean"]]),
+                              .to_pct(.paired[["No-AI SD"]])),
+  `Mean paired difference (95% CI), pp` = sprintf(
+    "%.1f [%.1f, %.1f]",
+    .to_pct(.paired[["Mean paired difference"]]),
+    .to_pct(.paired[["95% CI low"]]),
+    .to_pct(.paired[["95% CI high"]])
+  ),
+  `Cohen's dz` = round(.paired[["Cohen dz"]], 3),
+  `Hedges' gz` = round(.paired[["Hedges gz"]], 3),
+  `t(df)` = sprintf("%.3f (%s)", .paired$t, .paired$df),
+  p = vapply(.paired$p, .fmt_p, character(1)),
+  check.names = FALSE
+)
+
 .seq_desc <- .ref_analysis$sequence_descriptives
 .sequence_desc_tbl <- data.frame(
   `Randomized sequence` = .seq_desc$sequence_display,
@@ -523,7 +584,7 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 )
 
 .sign_tbl <- .exact_test_tbl
-.glmm_compact_tbl <- .clean_logistic
+.glmm_compact_tbl <- .glmm_or_tbl
 
 .reference_theme <- function() {
   ggplot2::theme_bw(base_size = 13) +
@@ -832,6 +893,19 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   ) +
   .reference_theme()
 
+.perm_null_composite <- {
+  if (!requireNamespace("patchwork", quietly = TRUE)) {
+    stop("The patchwork package is required to build Figure S4.")
+  }
+  .p_two <- .plot_null_distribution("two.sided") +
+    ggplot2::labs(title = "Two-sided") +
+    ggplot2::theme(plot.title = ggplot2::element_text(face = "bold", hjust = 0))
+  .plot_one <- .plot_null_distribution("greater") +
+    ggplot2::labs(title = "Exploratory one-sided") +
+    ggplot2::theme(plot.title = ggplot2::element_text(face = "bold", hjust = 0))
+  patchwork::wrap_plots(.p_two, .plot_one, ncol = 1)
+}
+
 # ---------------------------------------------------------------------------
 # Main body.
 # ---------------------------------------------------------------------------
@@ -858,23 +932,25 @@ if (file.exists(.item_fig_exploratory_path)) {
   "Descriptive summary of restricted rescaled 0-10 scores by study condition.",
   "Main", "Table 1A"
 )
-.copy_selected_table(
-  "tables/primary/08b_paired_difference_effect_size.csv",
+.write_selected_table(
+  .main_table1b,
   "main_body/tables/table1b_primary_paired_contrast.csv",
   "main_body/tables/table1b_primary_paired_contrast.png",
+  NULL,
   "AI-assisted minus No-AI paired contrast on the rescaled 0-10 metric.",
-  "Main", "Table 1B"
-)
-.copy_selected(
-  .item_fig_source,
-  "main_body/figures/figure2_item_endorsement_by_sequence.png",
-  "Item-level percent correct by item and post-test form, stratified by randomized sequence; Form Y items 1 and 6 were excluded from final restricted scoring.",
-  "Main", "Figure 2"
+  "Main", "Table 1B",
+  "rds/analysis_results.rds"
 )
 .copy_selected(
   "figures/supplementary/post_hoc_power_curve.png",
-  "main_body/figures/figure3_post_hoc_power_curve.png",
+  "main_body/figures/figure2_power_curve.png",
   "Post hoc paired-sample power curve for target effects; emphasizes that the observed sample was underpowered for small effects and future paired studies need larger sample sizes.",
+  "Main", "Figure 2"
+)
+.copy_selected(
+  .item_fig_source,
+  "main_body/figures/figure3_item_endorsement_by_sequence.png",
+  "Item-level percent correct by item and post-test form, stratified by randomized sequence; Form Y items 1 and 6 were excluded from final restricted scoring.",
   "Main", "Figure 3"
 )
 .write_selected_table(
@@ -896,12 +972,6 @@ if (file.exists(.item_fig_exploratory_path)) {
   "Participant allocation and 2 x 2 crossover counterbalancing schematic.",
   "Supplement", "Figure S1"
 )
-.copy_selected(
-  "figures/supplementary/post_hoc_power_curve.png",
-  "supplement/figures/figure_s2_post_hoc_power_curve.png",
-  "Post hoc paired-sample power curve by target effect size.",
-  "Supplement", "Figure S2"
-)
 .write_selected_table(
   .power_table,
   "supplement/tables/table_s1_post_hoc_power_analysis.csv",
@@ -912,45 +982,29 @@ if (file.exists(.item_fig_exploratory_path)) {
   "tables/supplementary/20_post_hoc_power_analysis.csv"
 )
 
-.copy_selected(
-  "figures/supplementary/condition_score_histogram_restricted.png",
-  "supplement/figures/figure_s3_condition_score_histogram_restricted.png",
-  "Restricted rescaled 0-10 score distributions by study condition.",
-  "Supplement", "Figure S3"
-)
-.copy_selected(
-  "figures/supplementary/sequence_difference_histogram_restricted.png",
-  "supplement/figures/figure_s4_sequence_difference_histogram_restricted.png",
-  "Paired score differences by randomized sequence.",
-  "Supplement", "Figure S4"
-)
-.copy_selected(
-  "figures/descriptive/score_difference_histogram.png",
-  "supplement/figures/figure_s5_paired_difference_histogram.png",
-  "Histogram of participant-level paired score differences.",
-  "Supplement", "Figure S5"
-)
-.copy_selected(
-  "figures/supplementary/paired_difference_dotplot_restricted.png",
-  "supplement/figures/figure_s6_paired_difference_dotplot_restricted.png",
-  "Participant-level restricted paired differences, AI-assisted minus No-AI.",
-  "Supplement", "Figure S6"
+.save_selected_plot(
+  .condition_hist_plot,
+  "supplement/figures/figure_s2_score_distributions_by_condition.png",
+  "Restricted score distributions by study condition.",
+  "Supplement", "Figure S2",
+  source_rel = "rds/analysis_results.rds",
+  width = 6.5, height = 4.5
 )
 .save_selected_plot(
-  .plot_null_distribution("two.sided"),
-  "supplement/figures/figure_s7_permutation_null_two_sided.png",
-  "Fisher-Pitman permutation-test null distribution for the two-sided paired test with the observed mean difference marked.",
-  "Supplement", "Figure S7",
+  .paired_diff_plot,
+  "supplement/figures/figure_s3_paired_condition_difference_distribution.png",
+  "Participant-level paired-condition-difference distribution.",
+  "Supplement", "Figure S3",
   source_rel = "rds/analysis_results.rds",
-  width = 7.5, height = 5
+  width = 6.5, height = 4.5
 )
 .save_selected_plot(
-  .plot_null_distribution("greater"),
-  "supplement/figures/figure_s8_permutation_null_one_sided.png",
-  "Fisher-Pitman permutation-test null distribution for the exploratory one-sided paired test with the observed mean difference marked.",
-  "Supplement", "Figure S8",
+  .perm_null_composite,
+  "supplement/figures/figure_s4_fisher_pitman_null_distributions.png",
+  "Two-sided and exploratory one-sided Fisher-Pitman permutation null distributions.",
+  "Supplement", "Figure S4",
   source_rel = "rds/analysis_results.rds",
-  width = 7.5, height = 5
+  width = 7.5, height = 7.5
 )
 
 .write_selected_table(
@@ -963,20 +1017,22 @@ if (file.exists(.item_fig_exploratory_path)) {
   "rds/analysis_results.rds"
 )
 .write_selected_table(
-  .clean_logistic,
+  .supp_glmm_log_odds_tbl,
   "supplement/tables/table_s3_logistic_mixed_model_results.csv",
   "supplement/tables/table_s3_logistic_mixed_model_results.png",
-  "Table S3. Clean logistic mixed model summary",
-  "Clean item-level logistic mixed model summaries using odds ratios and OR-scale 95% CIs.",
+  "Table S3. Detailed logistic mixed-model coefficients on the log-odds scale",
+  "Detailed GLMM coefficients on the log-odds scale; the null value is 0.",
   "Supplement", "Table S3",
   "rds/analysis_results.rds"
 )
-.copy_selected_table(
-  "tables/descriptive/02_descriptive_statistics.csv",
-  "supplement/tables/table_s4_full_descriptive_statistics.csv",
-  "supplement/tables/table_s4_full_descriptive_statistics.png",
-  "Full descriptive rescaled 0-10 score summaries by condition, period, and form.",
-  "Supplement", "Table S4"
+.write_selected_table(
+  .sequence_desc_tbl,
+  "supplement/tables/table_s4_randomized_sequence_paired_differences.csv",
+  "supplement/tables/table_s4_randomized_sequence_paired_differences.png",
+  "Table S4. Randomized-sequence-specific paired condition differences",
+  "Randomized-sequence-specific paired condition differences on the rescaled 0-10 metric.",
+  "Supplement", "Table S4",
+  "rds/analysis_results.rds"
 )
 .write_selected_table(
   .supp_desc_tbl,
@@ -986,32 +1042,6 @@ if (file.exists(.item_fig_exploratory_path)) {
   "Supplemental descriptive score summary with headers explicitly identifying the rescaled 0-10 metric.",
   "Supplement", "Table S5",
   "rds/analysis_results.rds"
-)
-.copy_selected_table(
-  "tables/primary/03_primary_contrasts.csv",
-  "supplement/tables/table_s6_primary_contrasts_full_and_restricted.csv",
-  "supplement/tables/table_s6_primary_contrasts_full_and_restricted.png",
-  "Full and restricted paired contrasts for condition and period effects on the rescaled 0-10 metric.",
-  "Supplement", "Table S6"
-)
-.copy_selected_table(
-  "tables/exploratory/19_item_endorsement_rates.csv",
-  "supplement/tables/table_s7_item_endorsement_rates.csv",
-  "supplement/tables/table_s7_item_endorsement_rates.png",
-  "Item-level endorsement rates by post-test form and randomized sequence.",
-  "Supplement", "Table S7"
-)
-.copy_selected(
-  "run_audit/analysis_run_log.md",
-  "supplement/audit/analysis_run_log.md",
-  "Analysis-run metadata, score denominator checks, target-power validation, and label-audit results.",
-  "Audit", "Run audit"
-)
-.copy_selected(
-  "run_audit/score_metadata_summary.csv",
-  "supplement/audit/score_metadata_summary.csv",
-  "Score denominator and primary metric metadata.",
-  "Audit", "Score metadata"
 )
 
 # ---------------------------------------------------------------------------
@@ -1196,14 +1226,12 @@ writeLines(.glmm_lines, .glmm_details_path, useBytes = TRUE)
   "- `main_body/tables/`",
   "- `supplement/figures/`",
   "- `supplement/tables/`",
-  "- `supplement/audit/`",
   "- `reference_analysis_style/figures/`",
   "- `reference_analysis_style/tables/`",
   "",
   .section_lines("Main", "Main manuscript candidates"),
   .section_lines("Supplement", "Supplementary manuscript candidates"),
   .section_lines(.ref_role, "Reference outputs"),
-  .section_lines("Audit", "Audit/reproducibility outputs"),
   "## Known differences from the reference R Markdown report",
   "",
   "- Visible labels use AI-assisted/No-AI terminology where appropriate.",
@@ -1224,7 +1252,9 @@ writeLines(.glmm_lines, .glmm_details_path, useBytes = TRUE)
   "- `tables/primary/00_main_results.csv` - compact primary table alias.",
   "- `tables/primary/00_overall_results.csv` - compact primary table.",
   "- `tables_png/primary/00_overall_results.png` - PNG of compact primary table.",
-  "- `tables/primary/03_primary_contrasts.csv` - broader contrast table, copied to supplement as Table S6.",
+  "- `tables/primary/03_primary_contrasts.csv` - broader contrast table retained in canonical outputs.",
+  "- `figures/supplementary/post_hoc_power_curve.png` - selected as main Figure 2, not duplicated in the supplement.",
+  "- `tables/exploratory/19_item_endorsement_rates.csv` - retained in canonical outputs; the manuscript-selected item endorsement output is main Figure 3.",
   "",
   "## Label Check",
   "",
@@ -1290,6 +1320,120 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
 
 .validate_public_selected_labels(.sel_root)
 
+.validate_selected_manuscript_structure <- function(root) {
+  main_figs <- sort(gsub(
+    "\\\\", "/",
+    list.files(file.path(root, "main_body", "figures"),
+               pattern = "\\.png$", full.names = FALSE)
+  ))
+  expected_main_figs <- c(
+    "figure1_paired_score_plot.png",
+    "figure2_power_curve.png",
+    "figure3_item_endorsement_by_sequence.png"
+  )
+  if (!identical(main_figs, expected_main_figs)) {
+    stop(
+      "Main figure filenames do not match the finalized manuscript order.\n",
+      "Expected: ", paste(expected_main_figs, collapse = ", "), "\n",
+      "Actual: ", paste(main_figs, collapse = ", ")
+    )
+  }
+
+  supp_figs <- sort(gsub(
+    "\\\\", "/",
+    list.files(file.path(root, "supplement", "figures"),
+               pattern = "\\.png$", full.names = FALSE)
+  ))
+  expected_supp_figs <- c(
+    "figure_s1_participant_flow.png",
+    "figure_s2_score_distributions_by_condition.png",
+    "figure_s3_paired_condition_difference_distribution.png",
+    "figure_s4_fisher_pitman_null_distributions.png"
+  )
+  if (!identical(supp_figs, expected_supp_figs)) {
+    stop(
+      "Supplementary figure filenames do not match Appendix F.\n",
+      "Expected: ", paste(expected_supp_figs, collapse = ", "), "\n",
+      "Actual: ", paste(supp_figs, collapse = ", ")
+    )
+  }
+
+  supp_csv <- sort(gsub(
+    "\\\\", "/",
+    list.files(file.path(root, "supplement", "tables"),
+               pattern = "\\.csv$", full.names = FALSE)
+  ))
+  expected_supp_csv <- c(
+    "table_s1_post_hoc_power_analysis.csv",
+    "table_s2_sign_permutation_tests.csv",
+    "table_s3_logistic_mixed_model_results.csv",
+    "table_s4_randomized_sequence_paired_differences.csv",
+    "table_s5_descriptive_scores_rescaled_0_10.csv"
+  )
+  if (!identical(supp_csv, expected_supp_csv)) {
+    stop(
+      "Supplementary table CSV filenames do not match Appendix F.\n",
+      "Expected: ", paste(expected_supp_csv, collapse = ", "), "\n",
+      "Actual: ", paste(supp_csv, collapse = ", ")
+    )
+  }
+
+  supp_png <- sort(gsub(
+    "\\\\", "/",
+    list.files(file.path(root, "supplement", "tables"),
+               pattern = "\\.png$", full.names = FALSE)
+  ))
+  expected_supp_png <- sub("\\.csv$", ".png", expected_supp_csv)
+  if (!identical(supp_png, expected_supp_png)) {
+    stop(
+      "Supplementary table PNG filenames do not match Appendix F.\n",
+      "Expected: ", paste(expected_supp_png, collapse = ", "), "\n",
+      "Actual: ", paste(supp_png, collapse = ", ")
+    )
+  }
+
+  if (any(grepl("power", supp_figs, ignore.case = TRUE))) {
+    stop("The power curve is duplicated in selected supplementary figures.")
+  }
+
+  stale_terms <- c(
+    "paired sign-flip", "two-tailed", "one-tailed",
+    "Sequence order", "Control-first", "Intervention-first"
+  )
+  text_files <- list.files(
+    file.path(root, c("main_body", "supplement")),
+    recursive = TRUE,
+    full.names = TRUE
+  )
+  text_files <- text_files[tolower(tools::file_ext(text_files)) %in%
+                             c("csv", "md", "txt", "tsv", "json", "yml", "yaml")]
+  stale_hits <- character()
+  for (f in text_files) {
+    lines <- tryCatch(readLines(f, warn = FALSE, encoding = "UTF-8"),
+                      error = function(e) character())
+    for (term in stale_terms) {
+      hit_idx <- grep(term, lines, ignore.case = FALSE, fixed = TRUE)
+      if (length(hit_idx) > 0) {
+        rel <- gsub("\\\\", "/", substring(f, nchar(root) + 2L))
+        stale_hits <- c(
+          stale_hits,
+          paste0(rel, ":", hit_idx, ": ", term)
+        )
+      }
+    }
+  }
+  if (length(stale_hits) > 0) {
+    stop(
+      "Selected manuscript-facing text contains stale terminology:\n  ",
+      paste(stale_hits, collapse = "\n  ")
+    )
+  }
+
+  log_check("Selected manuscript structure validation passed.")
+}
+
+.validate_selected_manuscript_structure(.sel_root)
+
 .missing <- .manifest[.manifest$required & !.manifest$present, , drop = FALSE]
 .present <- .manifest[.manifest$present, , drop = FALSE]
 
@@ -1313,7 +1457,7 @@ log_line("README      : manuscript_selected/README.md")
 log_line("Manifest    : manuscript_selected/manifest_validation.csv")
 log_line("Power table : manuscript_selected/supplement/tables/table_s1_post_hoc_power_analysis.csv")
 log_line("Power PNG   : manuscript_selected/supplement/tables/table_s1_post_hoc_power_analysis.png")
-log_line("Power curve : manuscript_selected/main_body/figures/figure3_post_hoc_power_curve.png")
+log_line("Power curve : manuscript_selected/main_body/figures/figure2_power_curve.png")
 
 if (exists("session_record_module", envir = .GlobalEnv)) {
   session_record_module("manuscript_selected", "OK", 0)

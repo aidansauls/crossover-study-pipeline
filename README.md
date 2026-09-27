@@ -350,6 +350,24 @@ analysis:
   floor_threshold:   null
 
 # ============================================================
+# publication_outputs:  Main/supplementary output organization
+# ============================================================
+publication_outputs:
+  enabled: true
+  folder_name: "publication_outputs"
+  main_figures:
+    - "paired_score_plot"
+    - "power_curve"
+    - "item_endorsement_by_sequence"
+  main_tables:
+    - "score_descriptive_summary"
+    - "primary_paired_contrast"
+    - "supporting_analysis_summary"
+  include_supplementary_figures: true
+  include_supplementary_tables: true
+  include_reference_outputs: false
+
+# ============================================================
 # figures:  Visual settings
 # ============================================================
 figures:
@@ -389,6 +407,13 @@ figures:
 
   # "none" = no annotations; "stars" = asterisk for p < .05
   significance_style: "none"
+
+  # {n} is replaced automatically with the analyzed paired sample size.
+  power_curve:
+    show_observed_sample: true
+    observed_sample_label: "Observed sample (n = {n})"
+    observed_sample_label_y: 0.07
+    export_pdf: true
 
 # ============================================================
 # tables:  Table export settings
@@ -510,6 +535,29 @@ Composite panels are saved to `outputs/comparison_my_study/`.
 ## 7. Outputs
 
 All outputs go to `outputs/<study_name>/`. Figures are PNG; tables are CSV and PNG.
+The power figure also has an optional vector PDF export, enabled by default.
+
+### Publication-ready folders
+
+Every full run also assembles an easy-to-navigate `publication_outputs/` folder:
+
+```text
+outputs/<study_name>/publication_outputs/
+  main_figures/          # Config-selected main figures; power PNG + vector PDF
+  main_tables/           # Config-selected main tables as CSV and PNG
+  supplementary_figures/# All remaining figures by analysis category (default)
+  supplementary_tables/ # All remaining table files by category (default)
+  OUTPUT_MANIFEST.csv    # Source and classification of every copied file
+  README.md
+```
+
+The defaults select the paired-score plot, power curve, and item-endorsement
+plot as the three main figures, and the descriptive summary, primary paired
+contrast, and supporting-analysis summary as the three main tables. Change the
+`publication_outputs` lists in the study config to customize those selections.
+Set `include_supplementary_figures` or `include_supplementary_tables` to `false`
+to omit either full supplementary tree. Canonical outputs below are retained so
+existing workflows and audit trails are not disturbed.
 
 ### Figures (`figures/`)
 

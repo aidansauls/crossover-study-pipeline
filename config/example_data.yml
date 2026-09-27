@@ -40,6 +40,21 @@ power_analysis:
   target_effects_pct: [5, 8, 10, 12, 15, 20]
   max_n: null
 
+publication_outputs:
+  enabled: true
+  folder_name: "publication_outputs"
+  main_figures:
+    - "paired_score_plot"
+    - "power_curve"
+    - "item_endorsement_by_sequence"
+  main_tables:
+    - "score_descriptive_summary"
+    - "primary_paired_contrast"
+    - "supporting_analysis_summary"
+  include_supplementary_figures: true
+  include_supplementary_tables: true
+  include_reference_outputs: false
+
 reference_analysis:
   enabled: true
   output_label: "Reference-analysis style"
@@ -78,6 +93,11 @@ figures:
   errorbar_width: 0.18
   show_ceiling_floor_lines: true
   significance_style: "none"
+  power_curve:
+    show_observed_sample: true
+    observed_sample_label: "Observed sample (n = {n})"
+    observed_sample_label_y: 0.07
+    export_pdf: true
 
 tables:
   export_csv: true

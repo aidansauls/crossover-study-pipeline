@@ -123,6 +123,8 @@ invisible(lapply(
       "supplement/tables/table_s6_primary_contrasts_full_and_restricted.png",
       "supplement/tables/table_s7_item_endorsement_rates.csv",
       "supplement/tables/table_s7_item_endorsement_rates.png",
+      "supplement/tables/table_s5_descriptive_scores_rescaled_0_10.csv",
+      "supplement/tables/table_s5_descriptive_scores_rescaled_0_10.png",
       "reference_analysis_style/tables/condition_descriptive_table_reference_style.csv",
       "reference_analysis_style/tables/condition_descriptive_table_reference_style.png",
       "reference_analysis_style/figures/permutation_null_two_tailed_reference_style.png",
@@ -185,30 +187,207 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
   )
 }
 
-.write_table_png <- function(df, png_path, caption) {
+.manuscript_table_style <- function(table_rel, df) {
+  cols <- names(df)
+  equal_widths <- stats::setNames(rep(100 / max(length(cols), 1), length(cols)), cols)
+  key <- tolower(basename(table_rel %||% ""))
+
+  style <- list(
+    widths = equal_widths,
+    left_cols = intersect(
+      cols,
+      c("Condition", "Model", "Contrast", "Test", "Difference definition",
+        "Randomized sequence", "Measure", "Measure_1")
+    ),
+    center_cols = character(0),
+    right_cols = character(0),
+    labels = stats::setNames(cols, cols),
+    font_size = 15,
+    vwidth = 1100,
+    row_padding = 5,
+    header_padding = 7,
+    horizontal_padding = 10,
+    divider_after = character(0)
+  )
+
+  if (grepl("table1a_score_descriptive_summary|table_s5_descriptive_scores", key)) {
+    style$widths <- stats::setNames(c(24, 9, 22, 29, 16), cols)
+    style$left_cols <- intersect(cols, "Condition")
+    style$center_cols <- setdiff(cols, style$left_cols)
+    style$divider_after <- intersect(cols, "Condition")
+  } else if (grepl("table1b_primary_paired_contrast", key)) {
+    style$widths <- stats::setNames(c(67, 33), cols)
+    style$left_cols <- intersect(cols, "Statistic")
+    style$right_cols <- intersect(cols, "Estimate")
+    style$font_size <- 15
+    style$vwidth <- 700
+    style$row_padding <- 4
+    style$header_padding <- 5
+    style$horizontal_padding <- 18
+    style$divider_after <- intersect(cols, "Statistic")
+  } else if (grepl("table2_supporting_analysis_summary", key)) {
+    style$widths <- stats::setNames(c(24, 36, 24, 8, 8), cols)
+    style$left_cols <- intersect(cols, c("Model", "Contrast"))
+    style$center_cols <- setdiff(cols, style$left_cols)
+    style$divider_after <- intersect(cols, "Contrast")
+  } else if (grepl("table_s1_post_hoc_power_analysis", key)) {
+    style$widths <- stats::setNames(c(25, 29, 14, 16, 16), cols)
+    style$left_cols <- character(0)
+    style$center_cols <- cols
+    style$divider_after <- intersect(cols, "Target difference (score units)")
+  } else if (grepl("table_s2_sign_permutation_tests", key)) {
+    style$widths <- stats::setNames(c(29, 25, 7, 10, 23, 6), cols)
+    style$left_cols <- intersect(cols, c("Test", "Difference definition"))
+    style$center_cols <- setdiff(cols, style$left_cols)
+    style$font_size <- 14
+    style$divider_after <- intersect(cols, "Difference definition")
+  } else if (grepl("table_s3_logistic_mixed_model_results", key)) {
+    style$widths <- stats::setNames(c(20, 28, 14, 8, 18, 6, 6), cols)
+    style$left_cols <- intersect(cols, c("Model", "Contrast"))
+    style$center_cols <- setdiff(cols, style$left_cols)
+    style$font_size <- 14
+    style$divider_after <- intersect(cols, "Contrast")
+  } else if (grepl("table_s4_randomized_sequence_paired_differences", key)) {
+    style$widths <- stats::setNames(c(25, 8, 22, 22, 23), cols)
+    style$left_cols <- intersect(cols, "Randomized sequence")
+    style$center_cols <- setdiff(cols, style$left_cols)
+    style$divider_after <- intersect(cols, "Randomized sequence")
+  } else {
+    style$center_cols <- setdiff(cols, style$left_cols)
+  }
+
+  style$widths <- style$widths[names(style$widths) %in% cols]
+  style$left_cols <- intersect(style$left_cols, cols)
+  style$center_cols <- intersect(style$center_cols, cols)
+  style$right_cols <- intersect(style$right_cols, cols)
+  style$labels <- style$labels[names(style$labels) %in% cols]
+  style$divider_after <- intersect(style$divider_after, utils::head(cols, -1L))
+  style
+}
+
+.write_table_png <- function(df, png_path, caption = NULL, notes = NULL,
+                             table_rel = NULL) {
   dir.create(dirname(png_path), recursive = TRUE, showWarnings = FALSE)
   .ok <- FALSE
 
   if (requireNamespace("gt", quietly = TRUE)) {
     .ok <- tryCatch({
       ensure_gt_png_export()
-      gt_tbl <- gt::gt(df)
+      display_names <- names(df)
+      gt_df <- df
+      if (anyDuplicated(names(gt_df))) {
+        names(gt_df) <- make.unique(names(gt_df), sep = "_")
+      }
+      style <- .manuscript_table_style(table_rel %||% png_path, gt_df)
+      style$labels <- stats::setNames(display_names, names(gt_df))
+
+      gt_tbl <- gt::gt(gt_df)
+      if (length(style$labels) > 0) {
+        gt_tbl <- gt::cols_label(gt_tbl, .list = as.list(style$labels))
+      }
+      if (length(style$widths) > 0) {
+        width_formulas <- lapply(names(style$widths), function(col) {
+          rlang::new_formula(rlang::sym(col), gt::pct(style$widths[[col]]))
+        })
+        gt_tbl <- gt::cols_width(gt_tbl, .list = width_formulas)
+      }
+      if (length(style$left_cols) > 0) {
+        gt_tbl <- gt::cols_align(
+          gt_tbl, align = "left", columns = dplyr::all_of(style$left_cols)
+        )
+      }
+      if (length(style$center_cols) > 0) {
+        gt_tbl <- gt::cols_align(
+          gt_tbl, align = "center", columns = dplyr::all_of(style$center_cols)
+        )
+      }
+      if (length(style$right_cols) > 0) {
+        gt_tbl <- gt::cols_align(
+          gt_tbl, align = "right", columns = dplyr::all_of(style$right_cols)
+        )
+      }
       gt_tbl <- gt_tbl |>
         gt::tab_options(
+          table.width = gt::pct(100),
+          table.layout = "fixed",
+          table.align = "left",
+          container.width = gt::px(style$vwidth),
+          container.padding.x = gt::px(0),
+          container.padding.y = gt::px(0),
           table.background.color = "white",
-          table.font.size = 12,
+          table.font.size = style$font_size,
           heading.title.font.size = 13,
           heading.subtitle.font.size = 11,
           column_labels.font.weight = "bold",
-          column_labels.background.color = "#F2F2F2",
-          column_labels.border.bottom.color = "#BFBFBF",
-          table.border.top.color = "#BFBFBF",
-          table.border.bottom.color = "#BFBFBF",
-          data_row.padding = gt::px(5),
-          row.striping.background_color = "#FAFAFA"
+          column_labels.background.color = "white",
+          column_labels.padding = gt::px(style$header_padding),
+          column_labels.padding.horizontal = gt::px(style$horizontal_padding),
+          column_labels.vlines.style = "none",
+          column_labels.border.top.style = "none",
+          column_labels.border.bottom.style = "solid",
+          column_labels.border.bottom.width = gt::px(1.3),
+          column_labels.border.bottom.color = "#4D4D4D",
+          table.border.top.style = "solid",
+          table.border.top.width = gt::px(1.5),
+          table.border.top.color = "#4D4D4D",
+          table.border.bottom.style = "solid",
+          table.border.bottom.width = gt::px(1.5),
+          table.border.bottom.color = "#4D4D4D",
+          table.border.left.style = "none",
+          table.border.right.style = "none",
+          table_body.hlines.style = "solid",
+          table_body.hlines.width = gt::px(0.7),
+          table_body.hlines.color = "#D8D8D8",
+          table_body.vlines.style = "none",
+          table_body.border.top.style = "none",
+          table_body.border.bottom.style = "none",
+          data_row.padding = gt::px(style$row_padding),
+          data_row.padding.horizontal = gt::px(style$horizontal_padding),
+          source_notes.font.size = style$font_size - 1,
+          source_notes.padding = gt::px(7),
+          source_notes.border.bottom.style = "none"
         ) |>
-        gt::opt_row_striping()
-      gt::gtsave(gt_tbl, png_path)
+        gt::tab_style(
+          style = gt::cell_text(align = "center"),
+          locations = gt::cells_column_labels(columns = dplyr::everything())
+        )
+      if (length(style$divider_after) > 0) {
+        divider_col <- style$divider_after[1]
+        divider_rule <- gt::cell_borders(
+          sides = "right",
+          color = "#E6E6E6",
+          style = "solid",
+          weight = gt::px(0.6)
+        )
+        gt_tbl <- gt_tbl |>
+          gt::tab_style(
+            style = divider_rule,
+            locations = gt::cells_column_labels(columns = dplyr::all_of(divider_col))
+          ) |>
+          gt::tab_style(
+            style = divider_rule,
+            locations = gt::cells_body(columns = dplyr::all_of(divider_col))
+          )
+      }
+      if (!is.null(notes) && length(notes) > 0) {
+        for (.note in notes) {
+          gt_tbl <- gt_tbl |> gt::tab_source_note(gt::md(.note))
+        }
+      }
+      .saved <- FALSE
+      .save_error <- NULL
+      for (.attempt in seq_len(2L)) {
+        .saved <- tryCatch({
+          gt::gtsave(gt_tbl, png_path, vwidth = style$vwidth, expand = 5)
+          TRUE
+        }, error = function(e) {
+          .save_error <<- e
+          FALSE
+        })
+        if (.saved) break
+        Sys.sleep(0.75)
+      }
+      if (!.saved) stop(.save_error)
       TRUE
     }, error = function(e) {
       log_warn("gt PNG export failed for selected table: ", conditionMessage(e))
@@ -217,7 +396,7 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
   }
 
   if (!.ok) {
-    save_table_png_fallback(df, png_path, caption = NULL)
+    save_table_png_fallback(df, png_path, caption = NULL, notes = notes)
   }
   invisible(png_path)
 }
@@ -250,7 +429,7 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
   if (file.exists(source_path)) {
     file.copy(source_path, csv_path, overwrite = TRUE)
     .body <- .read_table_body_csv(source_path)
-    .write_table_png(.body, png_path, caption = NULL)
+    .write_table_png(.body, png_path, caption = NULL, table_rel = target_png_rel)
   } else {
     log_warn("Missing manuscript-selected source: ", source_path)
   }
@@ -262,12 +441,13 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
 
 .write_selected_table <- function(df, csv_rel, png_rel, caption, description,
                                   role, label, source_rel,
-                                  required = TRUE) {
+                                  required = TRUE, notes = NULL) {
   csv_path <- file.path(.sel_root, csv_rel)
   png_path <- file.path(.sel_root, png_rel)
   dir.create(dirname(csv_path), recursive = TRUE, showWarnings = FALSE)
   utils::write.csv(df, csv_path, row.names = FALSE, na = "")
-  .write_table_png(df, png_path, caption = caption)
+  .write_table_png(df, png_path, caption = caption, notes = notes,
+                   table_rel = png_rel)
   .add_record(csv_rel, source_rel, description, role, label, required)
   .add_record(png_rel, source_rel, description, role, label, required)
   invisible(df)
@@ -312,6 +492,8 @@ if (is.null(dat)) {
 .ref_role <- "Reference"
 .ref_scoring <- .ref_analysis$scoring %||% "restricted"
 .scale_to <- as.numeric(score_meta$scale_to %||% cfg$scores$scale_to %||% 10)
+.scale_to_label <- format(.scale_to, trim = TRUE, scientific = FALSE)
+.score_metric_short <- paste0("rescaled 0-", .scale_to_label, " score")
 .ai_percent_col <- paste0("intervention_score_percent_", .ref_scoring)
 .noai_percent_col <- paste0("control_score_percent_", .ref_scoring)
 .ai_score_col <- paste0("intervention_score_", .ref_scoring)
@@ -335,67 +517,55 @@ if (!all(c(.ai_percent_col, .noai_percent_col, .ai_score_col, .noai_score_col) %
 )
 
 # ---------------------------------------------------------------------------
-# Required post hoc power table, regenerated from canonical power analysis.
+# Post hoc power table, regenerated from canonical analysis results.
+# No study-specific N values or target-power level are hard-coded here.
 # ---------------------------------------------------------------------------
 .power <- results$post_hoc_power
 if (is.null(.power) || is.null(.power$table)) {
   stop("Post hoc power results are unavailable. Run R/04_analyses.R first.")
 }
 
-.source_power_csv <- file.path(.out_root, "tables", "supplementary",
-                               "20_post_hoc_power_analysis.csv")
-if (!file.exists(.source_power_csv)) {
-  stop("Source power table is missing: ", .source_power_csv)
-}
-
-if (!identical(.power$target_power_label, "80%")) {
-  stop("Power target is not 80%; found target_power_label = ",
-       .power$target_power_label)
-}
-
-.expected_n <- stats::setNames(c(72L, 30L, 20L, 15L, 10L, 7L),
-                               c(5, 8, 10, 12, 15, 20))
 .effect_pct <- as.integer(.power$target_effects_pct)
 .actual_n <- as.integer(.power$table$n_for_target_power)
-.expected_match <- .expected_n[as.character(.effect_pct)]
-if (any(is.na(.expected_match)) || any(.actual_n != .expected_match)) {
+if (length(.effect_pct) != nrow(.power$table) ||
+    length(.actual_n) != nrow(.power$table) ||
+    any(!is.finite(.effect_pct)) || any(!is.finite(.actual_n))) {
   stop(
-    "Strict Y1+Y6 power table values differ from expected 80% values. ",
-    "Expected: ", paste(names(.expected_n), .expected_n, sep = " pp=", collapse = "; "),
-    ". Actual: ", paste(.effect_pct, .actual_n, sep = " pp=", collapse = "; ")
+    "Post hoc power results are incomplete or inconsistent with their table."
   )
 }
 
-.n_power_col_selected <- paste0("N for ", .power$target_power_label, " Power")
+.n_power_col_selected <- paste0("N for ", .power$target_power_label, " power")
+.observed_power_col_selected <- paste0(
+  "Power at N = ", as.integer(.power$n_pairs %||% 15L)
+)
 .power_table <- data.frame(
   `Target difference (pp)` = paste0(.effect_pct, " pp"),
-  `Target effect (rescaled 0-10 score units)` = round(
+  `Target difference (score units)` = round(
     .power$table[["Target effect (rescaled score units)"]], 2
   ),
   `Cohen's dz` = round(.power$table[["Cohen dz"]], 3),
-  `Power at observed N` = scales::percent(
+  observed_power = scales::percent(
     .power$table[["Power at observed N"]],
     accuracy = 0.1
   ),
   n_for_target_power = .actual_n,
   check.names = FALSE
 )
+names(.power_table)[names(.power_table) == "observed_power"] <-
+  .observed_power_col_selected
 names(.power_table)[names(.power_table) == "n_for_target_power"] <- .n_power_col_selected
 
 .supp_desc <- .ref_analysis$condition_descriptives
 .supp_desc_tbl <- data.frame(
   Condition = as.character(.supp_desc$condition),
   N = .supp_desc$n,
-  `Mean rescaled 0-10 score (SD)` = sprintf("%.2f (%.2f)",
-                                            .supp_desc$mean,
-                                            .supp_desc$sd),
-  `Median rescaled 0-10 score [IQR]` = sprintf("%.2f [%.2f, %.2f]",
-                                               .supp_desc$median,
-                                               .supp_desc$iqr_low,
-                                               .supp_desc$iqr_high),
-  `Range (rescaled 0-10 score)` = sprintf("%.2f-%.2f",
-                                          .supp_desc$min,
-                                          .supp_desc$max),
+  `Mean (SD)` = sprintf("%.2f (%.2f)", .supp_desc$mean, .supp_desc$sd),
+  `Median [IQR]` = sprintf("%.2f [%.2f, %.2f]",
+                           .supp_desc$median,
+                           .supp_desc$iqr_low,
+                           .supp_desc$iqr_high),
+  Range = sprintf("%.2f-%.2f", .supp_desc$min, .supp_desc$max),
   check.names = FALSE
 )
 
@@ -432,8 +602,8 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 .exact_test_tbl <- data.frame(
   Test = c(
     "Exact sign test",
-    "Fisher-Pitman permutation test (two-sided)",
-    "Fisher-Pitman permutation test (exploratory one-sided)"
+    "Fisher-Pitman, two-sided",
+    "Fisher-Pitman, exploratory one-sided"
   ),
   `Difference definition` = c(
     "AI-assisted minus No-AI",
@@ -448,14 +618,6 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     sprintf("Observed mean difference = %.4f", .obs_diff)
   ),
   p = c(.fmt_p(.exact_sign_p), .fmt_p(.perm_two_p), .fmt_p(.p_one)),
-  Notes = c(
-    paste0(.sign_ties,
-           " ties are excluded from the exact binomial calculation."),
-    paste0("Exact Fisher-Pitman enumeration over ",
-           .perm_assignments_label, " assignments."),
-    paste0("Exploratory one-sided exact Fisher-Pitman enumeration over ",
-           .perm_assignments_label, " assignments.")
-  ),
   check.names = FALSE
 )
 
@@ -465,7 +627,7 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     Model = dplyr::case_when(
       grepl("condition", .data$Model, ignore.case = TRUE) ~ "Condition model",
       grepl("period", .data$Model, ignore.case = TRUE) ~ "Period model",
-      TRUE ~ "Randomized-sequence model"
+      TRUE ~ "Sequence model"
     )
   )
 
@@ -548,23 +710,25 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 )
 
 .main_table1b <- data.frame(
-  N = .paired$n,
-  `AI-assisted mean (SD)` = sprintf("%.1f (%.1f)",
-                                    .to_pct(.paired[["AI-assisted mean"]]),
-                                    .to_pct(.paired[["AI-assisted SD"]])),
-  `No-AI mean (SD)` = sprintf("%.1f (%.1f)",
-                              .to_pct(.paired[["No-AI mean"]]),
-                              .to_pct(.paired[["No-AI SD"]])),
-  `Mean paired difference (95% CI), pp` = sprintf(
-    "%.1f [%.1f, %.1f]",
-    .to_pct(.paired[["Mean paired difference"]]),
-    .to_pct(.paired[["95% CI low"]]),
-    .to_pct(.paired[["95% CI high"]])
+  Statistic = c(
+    "Paired difference (95% CI), pp",
+    "Cohen's dz",
+    "Hedges' gz",
+    sprintf("t(%s)", .paired$df),
+    "p"
   ),
-  `Cohen's dz` = round(.paired[["Cohen dz"]], 3),
-  `Hedges' gz` = round(.paired[["Hedges gz"]], 3),
-  `t(df)` = sprintf("%.3f (%s)", .paired$t, .paired$df),
-  p = vapply(.paired$p, .fmt_p, character(1)),
+  Estimate = c(
+    sprintf(
+      "%.1f [%.1f, %.1f]",
+      .to_pct(.paired[["Mean paired difference"]]),
+      .to_pct(.paired[["95% CI low"]]),
+      .to_pct(.paired[["95% CI high"]])
+    ),
+    sprintf("%.3f", .paired[["Cohen dz"]]),
+    sprintf("%.3f", .paired[["Hedges gz"]]),
+    sprintf("%.3f", .paired$t),
+    vapply(.paired$p, .fmt_p, character(1))
+  ),
   check.names = FALSE
 )
 
@@ -578,8 +742,11 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   `No-AI mean (SD)` = sprintf("%.2f (%.2f)",
                               .seq_desc[["No-AI mean"]],
                               .seq_desc[["No-AI SD"]]),
-  `Mean paired difference` = round(.seq_desc[["Mean paired difference"]], 3),
-  `SD paired difference` = round(.seq_desc[["SD paired difference"]], 3),
+  `Paired difference, mean (SD)` = sprintf(
+    "%.3f (%.3f)",
+    .seq_desc[["Mean paired difference"]],
+    .seq_desc[["SD paired difference"]]
+  ),
   check.names = FALSE
 )
 
@@ -599,6 +766,12 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 
 .signed_pct <- function(x) {
   paste0(ifelse(x > 0, "+", ""), scales::number(x, accuracy = 1), "%")
+}
+.signed_number <- function(x, accuracy = 1) {
+  paste0(ifelse(x > 0, "+", ""), scales::number(x, accuracy = accuracy))
+}
+.signed_pp <- function(x, accuracy = 1) {
+  paste0(.signed_number(x, accuracy = accuracy), " pp")
 }
 
 .condition_hist_df <- dplyr::bind_rows(
@@ -627,13 +800,14 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   ggplot2::scale_fill_manual(values = .condition_colors, name = NULL) +
   ggplot2::scale_x_continuous(
     "Score (%)",
-    limits = c(0, 100),
-    breaks = seq(0, 100, by = 10)
+    breaks = seq(50, 100, by = 10),
+    labels = function(x) paste0(x, "%")
   ) +
   ggplot2::scale_y_continuous(
     "Relative frequency",
     labels = scales::number_format(accuracy = 0.01)
   ) +
+  ggplot2::coord_cartesian(xlim = c(50, 100)) +
   ggplot2::labs(title = NULL, subtitle = NULL, caption = NULL) +
   .reference_theme()
 
@@ -659,15 +833,15 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     "text",
     x = .mean_diff_pct,
     y = Inf,
-    label = paste0("Mean = ", .signed_pct(.mean_diff_pct)),
+    label = paste0("Mean = ", .signed_pp(.mean_diff_pct, accuracy = 0.1)),
     colour = "firebrick",
     hjust = -0.05,
     vjust = 1.4,
     size = 4
   ) +
-  ggplot2::scale_x_continuous(labels = .signed_pct) +
+  ggplot2::scale_x_continuous(labels = .signed_number) +
   ggplot2::labs(
-    x = "AI-assisted - No-AI",
+    x = "AI-assisted - No-AI (percentage points)",
     y = "Participants",
     title = NULL,
     subtitle = NULL,
@@ -677,18 +851,18 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 
 .plot_null_distribution <- function(alternative = c("two.sided", "greater")) {
   alternative <- match.arg(alternative)
-  perm_prop <- .perm_dist / .scale_to
-  obs_prop <- .obs_diff / .scale_to
-  vals <- sort(unique(round(perm_prop, 10)))
+  perm_pp <- .perm_dist / .scale_to * 100
+  obs_pp <- .obs_diff / .scale_to * 100
+  vals <- sort(unique(round(perm_pp, 10)))
   step <- diff(vals)
-  bar_width <- if (length(step)) min(step[step > 0], na.rm = TRUE) * 0.9 else 0.01
-  null_df <- as.data.frame(table(round(perm_prop, 10)), stringsAsFactors = FALSE)
+  bar_width <- if (length(step)) min(step[step > 0], na.rm = TRUE) * 0.9 else 1
+  null_df <- as.data.frame(table(round(perm_pp, 10)), stringsAsFactors = FALSE)
   names(null_df) <- c("mean_difference", "n")
   null_df$mean_difference <- as.numeric(null_df$mean_difference)
   null_df$extreme <- if (alternative == "two.sided") {
-    abs(null_df$mean_difference) >= abs(obs_prop) - sqrt(.Machine$double.eps)
+    abs(null_df$mean_difference) >= abs(obs_pp) - sqrt(.Machine$double.eps)
   } else {
-    null_df$mean_difference >= obs_prop - sqrt(.Machine$double.eps)
+    null_df$mean_difference >= obs_pp - sqrt(.Machine$double.eps)
   }
   p_value <- if (alternative == "two.sided") {
     .perm_two_p
@@ -702,7 +876,7 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     ggplot2::geom_col(width = bar_width, colour = "white", linewidth = 0.15) +
     ggplot2::scale_fill_manual(values = c("FALSE" = "grey75", "TRUE" = "firebrick"),
                                guide = "none") +
-    ggplot2::geom_vline(xintercept = obs_prop, colour = "#2E8B57",
+    ggplot2::geom_vline(xintercept = obs_pp, colour = "#2E8B57",
                         linewidth = 0.9) +
     ggplot2::annotate(
       "text",
@@ -716,17 +890,17 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     ) +
     ggplot2::annotate(
       "text",
-      x = obs_prop,
+      x = obs_pp,
       y = Inf,
-      label = "Observed mean difference",
-      hjust = ifelse(obs_prop >= 0, 1.05, -0.05),
+      label = paste0("Observed = ", .signed_pp(obs_pp, accuracy = 0.01)),
+      hjust = ifelse(obs_pp >= 0, 1.05, -0.05),
       vjust = 2.6,
       colour = "#2E8B57",
       size = 3.4
     ) +
-    ggplot2::scale_x_continuous(labels = scales::number_format(accuracy = 0.01)) +
+    ggplot2::scale_x_continuous(labels = .signed_number) +
     ggplot2::labs(
-      x = "Null mean difference (AI-assisted - No-AI, proportion correct)",
+      x = "Null mean difference (AI-assisted - No-AI, percentage points)",
       y = "Null distribution count",
       title = NULL,
       subtitle = NULL,
@@ -735,7 +909,7 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     .reference_theme()
 
   if (alternative == "two.sided") {
-    p <- p + ggplot2::geom_vline(xintercept = -obs_prop, colour = "firebrick",
+    p <- p + ggplot2::geom_vline(xintercept = -obs_pp, colour = "firebrick",
                                  linetype = "dotted", linewidth = 0.8)
   }
   p
@@ -922,22 +1096,27 @@ if (file.exists(.item_fig_exploratory_path)) {
 .copy_selected(
   "figures/primary/ai_assisted_vs_noai_paired.png",
   "main_body/figures/figure1_paired_score_plot.png",
-  "Participant-level paired rescaled 0-10 scores under No-AI and AI-assisted study; the wedge shows uncertainty in the mean paired difference.",
+  paste0("Participant-level paired ", .score_metric_short,
+         "s under No-AI and AI-assisted study; the wedge shows uncertainty in the mean paired difference."),
   "Main", "Figure 1"
 )
-.copy_selected_table(
-  "tables/descriptive/02b_condition_descriptives_restricted.csv",
+.write_selected_table(
+  .supp_desc_tbl,
   "main_body/tables/table1a_score_descriptive_summary.csv",
   "main_body/tables/table1a_score_descriptive_summary.png",
-  "Descriptive summary of restricted rescaled 0-10 scores by study condition.",
-  "Main", "Table 1A"
+  NULL,
+  paste0("Descriptive summary of restricted ", .score_metric_short,
+         "s by study condition."),
+  "Main", "Table 1A",
+  "rds/analysis_results.rds"
 )
 .write_selected_table(
   .main_table1b,
   "main_body/tables/table1b_primary_paired_contrast.csv",
   "main_body/tables/table1b_primary_paired_contrast.png",
   NULL,
-  "AI-assisted minus No-AI paired contrast on the rescaled 0-10 metric.",
+  paste0("AI-assisted minus No-AI paired contrast on the ",
+         .score_metric_short, " metric."),
   "Main", "Table 1B",
   "rds/analysis_results.rds"
 )
@@ -966,12 +1145,20 @@ if (file.exists(.item_fig_exploratory_path)) {
 # ---------------------------------------------------------------------------
 # Supplement.
 # ---------------------------------------------------------------------------
-.copy_selected(
-  "figures/supplementary/figure_s1_participant_flow.png",
-  "supplement/figures/figure_s1_participant_flow.png",
-  "Participant allocation and 2 x 2 crossover counterbalancing schematic.",
-  "Supplement", "Figure S1"
-)
+.generate_flow_selected <- isTRUE(cfg$flow_diagram$generate %||% FALSE)
+if (.generate_flow_selected) {
+  .copy_selected(
+    "figures/supplementary/figure_s1_participant_flow.png",
+    "supplement/figures/figure_s1_participant_flow.png",
+    "Participant allocation and 2 x 2 crossover counterbalancing schematic.",
+    "Supplement", "Figure S1"
+  )
+} else {
+  .remove_generated_file(
+    file.path(.sel_root, "supplement/figures/figure_s1_participant_flow.png"),
+    .sel_root
+  )
+}
 .write_selected_table(
   .power_table,
   "supplement/tables/table_s1_post_hoc_power_analysis.csv",
@@ -1030,16 +1217,19 @@ if (file.exists(.item_fig_exploratory_path)) {
   "supplement/tables/table_s4_randomized_sequence_paired_differences.csv",
   "supplement/tables/table_s4_randomized_sequence_paired_differences.png",
   "Table S4. Randomized-sequence-specific paired condition differences",
-  "Randomized-sequence-specific paired condition differences on the rescaled 0-10 metric.",
+  paste0("Randomized-sequence-specific paired condition differences on the ",
+         .score_metric_short, " metric, with mean and SD combined for compact display."),
   "Supplement", "Table S4",
   "rds/analysis_results.rds"
 )
 .write_selected_table(
   .supp_desc_tbl,
-  "supplement/tables/table_s5_descriptive_scores_rescaled_0_10.csv",
-  "supplement/tables/table_s5_descriptive_scores_rescaled_0_10.png",
-  "Table S5. Supplemental descriptive score summary on the rescaled 0-10 metric",
-  "Supplemental descriptive score summary with headers explicitly identifying the rescaled 0-10 metric.",
+  "supplement/tables/table_s5_descriptive_scores.csv",
+  "supplement/tables/table_s5_descriptive_scores.png",
+  paste0("Table S5. Supplemental descriptive score summary on the ",
+         .score_metric_short, " metric"),
+  paste0("Supplemental descriptive score summary on the ",
+         .score_metric_short, " metric with compact headers."),
   "Supplement", "Table S5",
   "rds/analysis_results.rds"
 )
@@ -1052,7 +1242,8 @@ if (file.exists(.item_fig_exploratory_path)) {
   "reference_analysis_style/tables/condition_percent_descriptive_table_reference_style.csv",
   "reference_analysis_style/tables/condition_percent_descriptive_table_reference_style.png",
   NULL,
-  "Reference-style condition descriptive table using percent correct; Table S5 is the separate rescaled 0-10 manuscript table.",
+  paste0("Reference-style condition descriptive table using percent correct; Table S5 is the separate ",
+         .score_metric_short, " manuscript table."),
   .ref_role, "Condition percent descriptive table",
   "rds/analysis_results.rds"
 )
@@ -1069,8 +1260,10 @@ if (file.exists(.item_fig_exploratory_path)) {
   .sequence_desc_tbl,
   "reference_analysis_style/tables/sequence_difference_table_reference_style.csv",
   "reference_analysis_style/tables/sequence_difference_table_reference_style.png",
-  "Reference sequence table. Scores and paired differences use the rescaled 0-10 metric",
-  "Sequence difference table using randomized-sequence labels; scores and paired differences use the rescaled 0-10 metric.",
+  paste0("Reference sequence table. Scores and paired differences use the ",
+         .score_metric_short, " metric"),
+  paste0("Sequence difference table using randomized-sequence labels; scores and paired differences use the ",
+         .score_metric_short, " metric."),
   .ref_role, "Sequence difference table",
   "rds/analysis_results.rds"
 )
@@ -1088,7 +1281,8 @@ if (file.exists(.item_fig_exploratory_path)) {
   "reference_analysis_style/tables/post_hoc_power_table_reference_style.csv",
   "reference_analysis_style/tables/post_hoc_power_table_reference_style.png",
   NULL,
-  "Post hoc power table corrected to 80% power.",
+  paste0("Post hoc power table using the configured ",
+         .power$target_power_label, " target."),
   .ref_role, "Power table",
   "tables/supplementary/20_post_hoc_power_analysis.csv"
 )
@@ -1109,7 +1303,7 @@ if (file.exists(.item_fig_exploratory_path)) {
   "",
   "Full item-level logistic mixed-model details for the compact GLMM table.",
   "",
-  "Models use the strict Y1+Y6 item exclusions and corrected display labels.",
+  "Models use the configured item exclusions and display labels.",
   ""
 )
 for (.model_name in names(.ref_analysis$logistic_models$models)) {
@@ -1218,7 +1412,7 @@ writeLines(.glmm_lines, .glmm_details_path, useBytes = TRUE)
 .readme_lines <- c(
   "# Manuscript Assembly Folder",
   "",
-  "Selected final Y1+Y6 outputs copied or regenerated from canonical pipeline outputs. Original outputs remain in their original folders.",
+  "Selected outputs copied or regenerated from canonical pipeline outputs. Original outputs remain in their original folders.",
   "",
   "## Folder Layout",
   "",
@@ -1235,14 +1429,15 @@ writeLines(.glmm_lines, .glmm_details_path, useBytes = TRUE)
   "## Known differences from the reference R Markdown report",
   "",
   "- Visible labels use AI-assisted/No-AI terminology where appropriate.",
-  "- Power calculations are 80% power, not 90%.",
+  paste0("- Power calculations use the configured target of ",
+         .power$target_power_label, "."),
   "- The period GLMM is labeled as a period/test-order model, not an AI-first/AI-second model.",
-  "- Strict Y1+Y6 scoring excludes Form Y items 1 and 6.",
+  "- Restricted scoring follows the configured item exclusions for this run.",
   paste0("- Form X has ", score_meta$restricted_item_counts$x,
          " included items and restricted Form Y has ",
          score_meta$restricted_item_counts$y, " included items."),
-  "- Scores use the rescaled 0-10 score metric.",
-  "- Some numeric values may differ from the reference report because this folder uses the final strict Y1+Y6 scoring and common-scale rescaling.",
+  paste0("- Scores use the ", .score_metric_short, " metric."),
+  "- Numeric values reflect this run's configured exclusions and common-scale rescaling.",
   "",
   "## Files intentionally not selected",
   "",
@@ -1345,7 +1540,7 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
                pattern = "\\.png$", full.names = FALSE)
   ))
   expected_supp_figs <- c(
-    "figure_s1_participant_flow.png",
+    if (.generate_flow_selected) "figure_s1_participant_flow.png",
     "figure_s2_score_distributions_by_condition.png",
     "figure_s3_paired_condition_difference_distribution.png",
     "figure_s4_fisher_pitman_null_distributions.png"
@@ -1368,7 +1563,7 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
     "table_s2_sign_permutation_tests.csv",
     "table_s3_logistic_mixed_model_results.csv",
     "table_s4_randomized_sequence_paired_differences.csv",
-    "table_s5_descriptive_scores_rescaled_0_10.csv"
+    "table_s5_descriptive_scores.csv"
   )
   if (!identical(supp_csv, expected_supp_csv)) {
     stop(

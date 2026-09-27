@@ -161,6 +161,20 @@ read_config <- function() {
       target_effects_pct = c(5, 8, 10, 12, 15, 20),
       max_n = NULL
     ),
+    publication_outputs = list(
+      enabled = TRUE,
+      folder_name = "publication_outputs",
+      main_figures = c(
+        "paired_score_plot", "power_curve", "item_endorsement_by_sequence"
+      ),
+      main_tables = c(
+        "score_descriptive_summary", "primary_paired_contrast",
+        "supporting_analysis_summary"
+      ),
+      include_supplementary_figures = TRUE,
+      include_supplementary_tables = TRUE,
+      include_reference_outputs = FALSE
+    ),
     reference_analysis = list(
       enabled = TRUE,
       output_label = "Reference-analysis style",
@@ -181,7 +195,13 @@ read_config <- function() {
       include_titles = FALSE, base_font_size = 12, font_family = "sans",
       color_intervention = "#2E8B57", color_control = "#CD853F",
       color_period1 = "#4682B4", color_period2 = "#B22222",
-      y_axis_score_label = "Rescaled 0-10 score", x_axis_form_label = "Test Form"
+      y_axis_score_label = "Rescaled 0-10 score", x_axis_form_label = "Test Form",
+      power_curve = list(
+        show_observed_sample = TRUE,
+        observed_sample_label = "Observed sample (n = {n})",
+        observed_sample_label_y = 0.07,
+        export_pdf = TRUE
+      )
     ),
     flow_diagram = list(
       generate = FALSE,
@@ -800,40 +820,72 @@ period_colors <- function() {
 # SAVE HELPERS
 # =============================================================================
 
-#' Save a ggplot as a PNG with descriptive filename
+#' Save a ggplot with a descriptive filename
 #' @param plot   ggplot object
 #' @param name   base file name (no extension)
 #' @param subfolder  one of the output subfolders (e.g., "primary")
 #' @param width  width in inches (NULL = config default)
 #' @param height height in inches (NULL = config default)
+#' @param formats one or more of "png" and "pdf" (default: "png")
 save_figure <- function(plot, name, subfolder = "supplementary",
-                        width = NULL, height = NULL) {
+                        width = NULL, height = NULL, formats = "png") {
   cfg <- read_config()
   dpi <- as.numeric(cfg$figures$dpi     %||% 300)
   w   <- width  %||% as.numeric(cfg$figures$width_in  %||% 7.5)
   h   <- height %||% as.numeric(cfg$figures$height_in %||% 5.0)
 
+  formats <- unique(tolower(as.character(formats)))
+  unsupported <- setdiff(formats, c("png", "pdf"))
+  if (!length(formats) || length(unsupported)) {
+    stop(
+      "save_figure formats must contain only 'png' and/or 'pdf'.",
+      if (length(unsupported)) paste0(" Unsupported: ", paste(unsupported, collapse = ", ")) else ""
+    )
+  }
+
   # When FIGURES_ROOT_SUFFIX is set (e.g. "figures_comparison"), write there
   # instead of the default "figures/" dir.  Used by the comparison script.
   .figs_root <- Sys.getenv("FIGURES_ROOT_SUFFIX", unset = "figures")
-  path <- out_path(.figs_root, subfolder, paste0(name, ".png"))
-  
-  # Use ragg if available for better anti-aliasing
-  if (requireNamespace("ragg", quietly = TRUE)) {
-    ragg::agg_png(path, width = w, height = h, units = "in", res = dpi)
-    suppressWarnings(print(plot))
-    dev.off()
-  } else {
-    suppressWarnings(
-      ggplot2::ggsave(path, plot = plot, width = w, height = h,
-                      dpi = dpi, bg = "white")
+  paths <- character()
+
+  for (format in formats) {
+    path <- out_path(.figs_root, subfolder, paste0(name, ".", format))
+
+    if (identical(format, "png")) {
+      # Use ragg if available for better anti-aliasing.
+      if (requireNamespace("ragg", quietly = TRUE)) {
+        ragg::agg_png(path, width = w, height = h, units = "in", res = dpi)
+        suppressWarnings(print(plot))
+        dev.off()
+      } else {
+        suppressWarnings(
+          ggplot2::ggsave(path, plot = plot, width = w, height = h,
+                          dpi = dpi, bg = "white")
+        )
+      }
+    } else {
+      .pdf_device <- if (isTRUE(capabilities("cairo"))) {
+        grDevices::cairo_pdf
+      } else {
+        grDevices::pdf
+      }
+      suppressWarnings(
+        ggplot2::ggsave(path, plot = plot, width = w, height = h,
+                        device = .pdf_device, bg = "white")
+      )
+    }
+
+    paths <- c(paths, path)
+    sz_kb <- tryCatch(round(file.size(path) / 1024, 1L), error = function(e) NA_real_)
+    log_line("Figure saved : ", .figs_root, "/", subfolder, "/", basename(path))
+    log_line(
+      "             : ", w, " x ", h, " in  |  ",
+      if (identical(format, "png")) paste0(dpi, " dpi  |  ") else "vector PDF  |  ",
+      sz_kb, " KB"
     )
   }
-  
-  sz_kb <- tryCatch(round(file.size(path) / 1024, 1L), error = function(e) NA_real_)
-  log_line("Figure saved : figures/", subfolder, "/", basename(path))
-  log_line("             : ", w, " x ", h, " in  |  ", dpi, " dpi  |  ", sz_kb, " KB")
-  invisible(path)
+
+  invisible(paths)
 }
 
 ensure_gt_png_export <- function() {

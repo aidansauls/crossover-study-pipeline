@@ -364,15 +364,25 @@ if (file.exists(.asgn_path)) {
     error = function(e) { log_warn("Could not read assignment.csv: ", e$message); NULL }
   )
   if (!is.null(.asgn_raw)) {
+    # Apply the same configurable column mapping used by 01_data_import.R.
+    # This supports both current names (Intervention_Order/X_Order) and the
+    # legacy AI_Order schema without hard-coding either one here.
+    .asgn_raw <- .asgn_raw |>
+      janitor::clean_names() |>
+      standardize_assignment_cols()
     .design_tbl <- .asgn_raw |>
       dplyr::mutate(
-        seq_grp = ifelse(.data$AI_Order == "1st",
+        seq_grp = ifelse(order_to_period(.data$intervention_order) == 1L,
                          cfg$display_labels$sequence_ai_first %||% paste0(int_display, " first"),
                          cfg$display_labels$sequence_control_first %||% paste0(ctl_display, " first")),
-        cond_p1 = ifelse(.data$AI_Order == "1st", int_display,   ctl_display),
-        cond_p2 = ifelse(.data$AI_Order == "1st", ctl_display,   int_display),
-        form_p1 = ifelse(.data$X_Order  == "1st", form_x_lbl,  form_y_lbl),
-        form_p2 = ifelse(.data$X_Order  == "1st", form_y_lbl,  form_x_lbl)
+        cond_p1 = ifelse(order_to_period(.data$intervention_order) == 1L,
+                         int_display, ctl_display),
+        cond_p2 = ifelse(order_to_period(.data$intervention_order) == 1L,
+                         ctl_display, int_display),
+        form_p1 = ifelse(order_to_period(.data$form_x_order) == 1L,
+                         form_x_lbl, form_y_lbl),
+        form_p2 = ifelse(order_to_period(.data$form_x_order) == 1L,
+                         form_y_lbl, form_x_lbl)
       ) |>
       dplyr::group_by(seq_grp, cond_p1, cond_p2, form_p1, form_p2) |>
       dplyr::summarise(n = dplyr::n(), .groups = "drop") |>

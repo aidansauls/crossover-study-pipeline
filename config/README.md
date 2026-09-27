@@ -15,7 +15,23 @@ The `study.name` value in each config determines the output subfolder under `out
 1. Copy `study_config.yml` and rename it -- e.g. `my_study.yml`
 2. Set `study.name` to match your data folder name under `study_data/`
 3. Update labels, item exclusions, colors, and thresholds as needed
-4. Run with `RunPipeline.bat` and select your config when prompted
+4. Review `publication_outputs` to choose the main figures/tables and whether
+   the complete supplementary figure/table trees should be assembled
+5. Run with `RunPipeline.bat` and select your config when prompted
+
+The default main-output IDs are:
+
+- Figures: `paired_score_plot`, `power_curve`, `item_endorsement_by_sequence`
+- Tables: `score_descriptive_summary`, `primary_paired_contrast`,
+  `supporting_analysis_summary`
+
+The assembled files are written to
+`outputs/<study>/publication_outputs/main_figures/` and `main_tables/`. Set
+`include_supplementary_figures` or `include_supplementary_tables` to `false`
+when the full supplementary export is not wanted. Advanced users may put an
+output-relative PNG/table path in a main list to select a custom output.
+The power figure is additionally exported as a vector PDF when
+`figures.power_curve.export_pdf` is `true` (the default).
 
 ## Multiple analysis variants
 

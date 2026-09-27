@@ -24,8 +24,9 @@ if (trimws(tolower(.modules_raw)) == "list") {
   cat("  tables          06_tables.R               (opt-in)\n")
   cat("  demographics    07_demographics.R         (opt-in; also needs demographics.generate: true in config)\n")
   cat("  manuscript      10_manuscript_selected.R  (post-audit manuscript-selected assembly)\n")
+  cat("  publication     11_publication_outputs.R  (clear main/supplementary output folders)\n")
   cat("\nSet ANALYSIS_MODULES=all to run everything, or comma-separate IDs, e.g.:\n")
-  cat("  ANALYSIS_MODULES=psychometrics,analyses,figures,tables,manuscript\n")
+  cat("  ANALYSIS_MODULES=psychometrics,analyses,figures,tables,manuscript,publication\n")
   cat("\nSet REUSE_DATA=1 to skip import+scores when RDS files already exist.\n")
   quit(save = "no", status = 0)
 }
@@ -246,7 +247,14 @@ if (exists("write_session_summary_txt", envir = .GlobalEnv)) {
 }
 
 .manuscript_err <- NULL
-.run_manuscript <- run_all_modules || "manuscript" %in% modules_env
+.run_publication <- run_all_modules || "publication" %in% modules_env
+.publication_enabled <- if (exists("cfg_get", envir = .GlobalEnv)) {
+  isTRUE(cfg_get("publication_outputs", "enabled", default = TRUE))
+} else {
+  TRUE
+}
+.run_manuscript <- run_all_modules || "manuscript" %in% modules_env ||
+  (.run_publication && .publication_enabled)
 if (.run_manuscript) {
   .manuscript_path <- R_script("10_manuscript_selected.R")
   cat(strrep("-", 72), "\n")
@@ -272,4 +280,30 @@ if (.run_manuscript) {
 
 # Exit with error code if any step failed
 if (!is.null(.manuscript_err)) quit(status = 1, save = "no")
+
+.publication_err <- NULL
+if (.run_publication && .publication_enabled) {
+  .publication_path <- R_script("11_publication_outputs.R")
+  cat(strrep("-", 72), "\n")
+  cat("RUNNING: ", "11_publication_outputs.R", "\n")
+  cat(strrep("-", 72), "\n")
+  if (file.exists(.publication_path)) {
+    tryCatch(
+      source(.publication_path, echo = FALSE),
+      error = function(e) {
+        .publication_err <<- e
+        cat("[ERROR] Publication output assembly failed:",
+            conditionMessage(e), "\n")
+        if (exists("session_record_error", envir = .GlobalEnv))
+          session_record_error(paste0("11_publication_outputs.R: ",
+                                      conditionMessage(e)))
+      }
+    )
+  } else {
+    .publication_err <- simpleError(paste("Script not found:", .publication_path))
+    cat("[ERROR] Script not found:", .publication_path, "\n")
+  }
+}
+
+if (!is.null(.publication_err)) quit(status = 1, save = "no")
 if (n_err > 0) quit(status = 1, save = "no")

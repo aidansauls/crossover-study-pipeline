@@ -797,6 +797,29 @@ if (!is.null(.power_res) && !is.null(.power_res$curve) &&
     "Target difference (N for ", .power_res$target_power_label, " power)"
   )
   .observed_n12 <- as.numeric(.power_res$n_pairs %||% nrow(dat))
+  .power_curve_cfg12 <- cfg$figures$power_curve %||% list()
+  .show_observed12 <- isTRUE(
+    .power_curve_cfg12$show_observed_sample %||% TRUE
+  )
+  .observed_label_template12 <- as.character(
+    .power_curve_cfg12$observed_sample_label %||%
+      "Observed sample (n = {n})"
+  )[1]
+  .observed_n_label12 <- if (isTRUE(all.equal(.observed_n12, round(.observed_n12)))) {
+    format(round(.observed_n12), trim = TRUE, scientific = FALSE)
+  } else {
+    format(.observed_n12, trim = TRUE, scientific = FALSE)
+  }
+  .observed_label12 <- gsub(
+    "{n}", .observed_n_label12, .observed_label_template12, fixed = TRUE
+  )
+  .curve_x_range12 <- range(.curve12$n_pairs, na.rm = TRUE)
+  .observed_label_x12 <- .observed_n12 + max(0.9, 0.0125 * diff(.curve_x_range12))
+  .observed_label_y12 <- suppressWarnings(as.numeric(
+    .power_curve_cfg12$observed_sample_label_y %||% 0.07
+  ))
+  if (!is.finite(.observed_label_y12)) .observed_label_y12 <- 0.07
+  .export_power_pdf12 <- isTRUE(.power_curve_cfg12$export_pdf %||% TRUE)
 
   fig12 <- ggplot2::ggplot(
       .curve12,
@@ -809,30 +832,35 @@ if (!is.null(.power_res) && !is.null(.power_res$curve) &&
       colour = "grey35",
       linewidth = 0.6
     ) +
-    ggplot2::geom_vline(
-      xintercept = .observed_n12,
-      linetype = "dashed",
-      colour = "grey35",
-      linewidth = 0.6
-    ) +
     ggplot2::geom_line(linewidth = 0.85) +
     ggplot2::geom_point(
       data = .line_dat12,
       ggplot2::aes(x = .data$n_for_target_power, y = .data$power),
       size = 2.2,
       show.legend = FALSE
-    ) +
-    ggplot2::annotate(
-      "text",
-      x = .observed_n12 + 1.2,
-      y = 0.08,
-      label = paste0("Observed sample (n = ", .observed_n12, ")"),
-      angle = 90,
-      hjust = 0,
-      vjust = 0.5,
-      colour = "grey25",
-      size = 3.2
-    ) +
+    )
+
+  if (.show_observed12) {
+    fig12 <- fig12 +
+      ggplot2::geom_vline(
+        xintercept = .observed_n12,
+        linetype = "dashed",
+        colour = "grey45",
+        linewidth = 0.55
+      ) +
+      ggplot2::annotate(
+        "text",
+        x = .observed_label_x12,
+        y = .observed_label_y12,
+        label = .observed_label12,
+        hjust = 0,
+        vjust = 0.5,
+        colour = "grey25",
+        size = 3.4
+      )
+  }
+
+  fig12 <- fig12 +
     ggplot2::scale_y_continuous(
       name = "Power",
       limits = c(0, 1),
@@ -845,7 +873,8 @@ if (!is.null(.power_res) && !is.null(.power_res$curve) &&
 
   save_figure(fig12, "post_hoc_power_curve",
               subfolder = "supplementary",
-              width = 7.5, height = 5)
+              width = 7.5, height = 5,
+              formats = if (.export_power_pdf12) c("png", "pdf") else "png")
 } else {
   log_line("Post-hoc power curve skipped: post_hoc_power results not available")
 }
@@ -891,6 +920,13 @@ dat_diff14  <- dat |>
   dplyr::filter(!is.na(.data$delta))
 n_diff14    <- nrow(dat_diff14)
 mean_d14    <- mean(dat_diff14$delta, na.rm = TRUE)
+.reference_lines14 <- data.frame(
+  x = c(0, mean_d14),
+  Reference = factor(
+    c("No difference", "Observed mean"),
+    levels = c("No difference", "Observed mean")
+  )
+)
 
 # Adaptive binwidth: 1 for integer/narrow ranges, wider for large ranges
 range_d14  <- diff(range(dat_diff14$delta, na.rm = TRUE))
@@ -899,12 +935,23 @@ bw_d14     <- if (range_d14 <= 20) 1 else ceiling(range_d14 / 20)
 fig14 <- ggplot2::ggplot(dat_diff14, ggplot2::aes(x = .data$delta)) +
   ggplot2::geom_histogram(binwidth = bw_d14, fill = col_int, colour = "white",
                            linewidth = 0.3, boundary = -0.5) +
-  ggplot2::geom_vline(xintercept = 0,       linetype = "dashed",
-                      colour = "grey40",    linewidth = 0.6) +
-  ggplot2::geom_vline(xintercept = mean_d14, linetype = "solid",
-                      colour = col_ctl,     linewidth = 0.9) +
+  ggplot2::geom_vline(
+    data = .reference_lines14,
+    ggplot2::aes(xintercept = .data$x, colour = .data$Reference,
+                 linetype = .data$Reference),
+    linewidth = 0.8,
+    inherit.aes = FALSE
+  ) +
+  ggplot2::scale_colour_manual(
+    values = c("No difference" = "grey40", "Observed mean" = col_ctl),
+    name = NULL
+  ) +
+  ggplot2::scale_linetype_manual(
+    values = c("No difference" = "dashed", "Observed mean" = "solid"),
+    name = NULL
+  ) +
   ggplot2::scale_x_continuous(
-    name = paste0(int_label, " \u2212 ", ctl_label, " (score difference)")
+    name = paste0(int_display, " \u2212 ", ctl_display, " (score difference)")
   ) +
   ggplot2::scale_y_continuous(
     name   = "Count (participants)",
@@ -916,7 +963,8 @@ fig14 <- ggplot2::ggplot(dat_diff14, ggplot2::aes(x = .data$delta)) +
       seq(0, ceiling(max(x) / step) * step, by = step)
     }
   ) +
-  theme_clean()
+  theme_clean() +
+  ggplot2::theme(legend.position = "bottom")
 
 save_figure(fig14, "score_difference_histogram", subfolder = "descriptive",
             width = 5.5, height = 4.0)
@@ -1088,9 +1136,19 @@ if (!is.null(.ref_analysis$sign_permutation$permutation_distribution) &&
       y = Inf,
       label = "Observed mean difference",
       vjust = 1.5,
-      hjust = ifelse(.obs_diff >= 0, 1.05, -0.05),
+      hjust = ifelse(.obs_diff >= 0, -0.05, 1.05),
       colour = col_int,
       size = 3.2
+    ) +
+    ggplot2::annotate(
+      "text",
+      x = -.obs_diff,
+      y = Inf,
+      label = "Symmetric two-sided cutoff",
+      vjust = 3.1,
+      hjust = ifelse(.obs_diff >= 0, 1.05, -0.05),
+      colour = col_int,
+      size = 3.0
     ) +
     ggplot2::scale_x_continuous(
       name = paste0("Null mean difference (", int_display, " - ", ctl_display, ")")
@@ -2081,9 +2139,8 @@ if (!is.null(.raw_data_27)) {
     .col_ord <- cols_full[order(.num_ord)]
     .ea29     <- if (!is.null(excl_always)) excl_always else character(0)
     .col_lbl <- vapply(.col_ord, function(col) {
-      if (!is.null(excl_always) && col %in% .ea29) paste0(toupper(col), "**")
-      else if (col %in% excl_cols)                 paste0(toupper(col), "*")
-      else                                          toupper(col)
+      if (col %in% union(excl_cols, .ea29)) paste0(toupper(col), "*")
+      else                                  toupper(col)
     }, character(1))
 
     items_df |>

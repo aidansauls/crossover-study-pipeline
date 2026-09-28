@@ -10,6 +10,7 @@ if (-not $repoRoot) {
 
 $tracked = @(& git -C $repoRoot ls-files)
 $failures = [System.Collections.Generic.List[string]]::new()
+$absolutePathPattern = '(?i)([A-Z]:\\(?:Users|GitHub)\\|/Users/)'
 
 foreach ($path in $tracked) {
     $slashPath = $path -replace '\\', '/'
@@ -54,7 +55,11 @@ foreach ($path in $tracked) {
     if ($text -match '(?i)\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b') {
         $failures.Add("Tracked text contains an email address: $slashPath")
     }
-    if ($text -match '(?i)([A-Z]:\\(?:Users|GitHub)\\|/Users/)') {
+    $pathScanText = $text
+    if ($slashPath -eq 'tools/Check-RepoSafety.ps1') {
+        $pathScanText = $pathScanText.Replace($absolutePathPattern, '')
+    }
+    if ($pathScanText -match $absolutePathPattern) {
         $failures.Add("Tracked text contains an absolute local-machine path: $slashPath")
     }
 }

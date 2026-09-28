@@ -62,8 +62,8 @@ analysis:
   min_n_carryover: 4
   # Ceiling and floor thresholds used in figures and Table 14.
   # Set to null to auto-compute as 95% / 5% of scores.scale_to.
-  ceiling_threshold: null   # e.g. 9.5 for a 0–10 scale
-  floor_threshold: null     # e.g. 0.5 for a 0–10 scale
+  ceiling_threshold: null   # e.g. 9.5 for a 0-10 scale
+  floor_threshold: null     # e.g. 0.5 for a 0-10 scale
 
 # -----------------------------------------------------------------------------
 # Post-hoc paired-test power/sample-size analysis
@@ -93,15 +93,6 @@ publication_outputs:
     - "supporting_analysis_summary"
   include_supplementary_figures: true
   include_supplementary_tables: true
-  include_reference_outputs: false
-
-# -----------------------------------------------------------------------------
-# Neutral reference-analysis style exports for manuscript-selected outputs.
-# -----------------------------------------------------------------------------
-reference_analysis:
-  enabled: true
-  output_label: "Reference-analysis style"
-  output_prefix: "reference"
 
 # -----------------------------------------------------------------------------
 # Display-only labels. These do not change analysis coding.
@@ -180,7 +171,7 @@ flow_diagram:
   width_in: 7.5
   height_in: 5.0
   dpi: 300
-  setup_label: "Participants (n = {n}) completed lecture + AI guidance, \n then were assigned to randomized sequence"
+  setup_label: "Participants (n = {n}) were randomized to sequence before the session\nand completed the lecture + AI guidance before Block 1"
   control_sequence_label: "No-AI first"
   ai_sequence_label: "AI-assisted first"
   period1_control_label: "No-AI study (20 min)"
@@ -190,7 +181,6 @@ flow_diagram:
   period2_control_label: "No-AI study\n(20 min)"
   period2_ai_label: "AI-assisted study\n(20 min)"
   show_row_labels: false
-  break_duration: "10-15 min"  # logged only; include in caption if needed
   colors:
     control_fill: "#FFF3E6"
     control_border: "#D8893A"
@@ -244,7 +234,7 @@ output:
 # -----------------------------------------------------------------------------
 # Demographics module
 # Set generate: true and provide demographics.csv in your study data folder.
-# Column names below are the defaults — change to match your CSV headers.
+# Column names below are the defaults -- change to match your CSV headers.
 # -----------------------------------------------------------------------------
 demographics:
   generate: false                   # set true when you have a demographics.csv
@@ -262,7 +252,7 @@ demographics:
 sf36:
   generate: false                   # set true when you have sf36_scores.csv
   file: "sf36_scores.csv"           # filename relative to STUDY_DATA_PATH
-  # Override domain column → label mapping (leave blank to use SF-36 defaults)
+  # Override domain column -> label mapping (leave blank to use SF-36 defaults)
   # domains:
   #   physical_functioning: "Physical Functioning"
   #   role_physical: "Role - Physical"
@@ -291,7 +281,7 @@ optional_analyses:
   run_ceiling_effects_figure: true
   # Run period-specific intervention effect analysis (Int-in-P1 vs Int-in-P2)
   run_period_specific_intervention: true
-  # Run 4-subgroup (sequence × intervention form) contrasts
+  # Run 4-subgroup (sequence x intervention form) contrasts
   run_subgroup4_contrasts: true
   # Run post-hoc paired-test power/sample-size analysis
   run_post_hoc_power: true
@@ -311,11 +301,11 @@ psychometrics:
 
   # Suspicious item detection thresholds.
   # top_miss_threshold: flag an item if the TOP ability stratum misses it at
-  #   this rate or above. E.g. 0.25 = flagged when ≥25% of the top group misses.
+  #   this rate or above. E.g. 0.25 = flagged when >=25% of the top group misses.
   top_miss_threshold: 0.25
 
   # bottom_hit_threshold: flag an item if the BOTTOM ability stratum gets it
-  #   right at this rate or above. E.g. 0.60 = flagged when ≥60% of the
+  #   right at this rate or above. E.g. 0.60 = flagged when >=60% of the
   #   bottom group answers correctly (suggests guessing / item is too easy).
   bottom_hit_threshold: 0.60
 
@@ -339,7 +329,7 @@ psychometrics:
 # It is read by run_comparison.R / 08_comparison_figures.R to generate
 # side-by-side or top-and-bottom panels comparing multiple completed runs.
 #
-# Create a separate YAML file (e.g. config/comparison_pilot.yml) that
+# Create a separate YAML file (e.g. config/comparison_my_study.yml) that
 # contains only this section, then set:
 #   $env:COMPARISON_CONFIG = "config\comparison_pilot.yml"
 # before running Rscript R\run_comparison.R  -- or use RunPipeline.bat option [9].
@@ -356,8 +346,8 @@ psychometrics:
 #       label: "X1 Excluded"
 #
 #   # How to arrange the panels.
-#   #   "side_by_side"  — runs left to right (wide composite)
-#   #   "top_bottom"    — runs stacked vertically (tall composite)
+#   #   "side_by_side"  -- runs left to right (wide composite)
+#   #   "top_bottom"    -- runs stacked vertically (tall composite)
 #   layout: "side_by_side"
 #
 #   # Name for the output directory (created under outputs/).

@@ -9,6 +9,7 @@ The `study.name` value in each config determines the output subfolder under `out
 |---|---|
 | `study_config.yml` | Master template -- copy and rename this for your own study |
 | `example_data.yml` | Config used by the bundled 100-participant example dataset |
+| `comparison_example.yml` | Generic comparison-workflow example; edit run names locally |
 
 ## Creating your own config
 
@@ -33,6 +34,11 @@ output-relative PNG/table path in a main list to select a custom output.
 The power figure is additionally exported as a vector PDF when
 `figures.power_curve.export_pdf` is `true` (the default).
 
+The tracked template remains generic. After each successful run, the pipeline
+writes the exact resolved settings (including runtime overrides) to
+`outputs/<study>/run_provenance/effective_config.yml`. Keep real-study configs
+local; do not add them to the public repository.
+
 ## Multiple analysis variants
 
 To run several exclusion variants of the same dataset, create one config file
@@ -48,3 +54,5 @@ Comparison configs (for generating side-by-side panel figures from multiple runs
 live here too. Use the naming convention `comparison_<study>.yml`.
 The BAT's option [9] lists all `comparison_*.yml` files automatically.
 See [README section 6](../README.md#6-multiple-analysis-variants) for the YAML format.
+The tracked `comparison_example.yml` uses only generic names; copy it locally for
+study-specific comparisons.

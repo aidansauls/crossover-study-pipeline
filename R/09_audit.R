@@ -4,7 +4,7 @@
 ## Writes AUDIT.csv and AUDIT.md to the output root of a pipeline run or
 ## comparison run.
 ## Sourced from run_all.R (regular runs) and 08_comparison_figures.R (comparison).
-## Copyright (c) 2026 Aidan Sauls â€” see LICENSE for terms.
+## Copyright (c) 2026 Aidan Sauls — see LICENSE for terms.
 ## =============================================================================
 
 local({
@@ -23,7 +23,7 @@ local({
   } else {
     .sn <- Sys.getenv("STUDY_NAME", unset = "")
     if (!nzchar(.sn)) {
-      message("[AUDIT] Cannot resolve study name â€” skipping.")
+      message("[AUDIT] Cannot resolve study name — skipping.")
       return(invisible(NULL))
     }
     .name <- .sn
@@ -31,7 +31,7 @@ local({
   }
 
   if (!dir.exists(.dir)) {
-    message("[AUDIT] Output directory not found: ", .dir, " â€” skipping.")
+    message("[AUDIT] Output directory not found: ", .dir, " — skipping.")
     return(invisible(NULL))
   }
 
@@ -51,7 +51,7 @@ local({
   }
 
   # ---------------------------------------------------------------------------
-  # Registry: known file stem â†’ (desc, scoring, role, note)
+  # Registry: known file stem → (desc, scoring, role, note)
   #
   # scoring: Full | Restricted | Full+Restricted | Cross-run | N/A
   # role:    Core | Secondary | Descriptive | Exploratory |
@@ -104,17 +104,17 @@ local({
     "10a_sign_permutation_tests"           = list(desc = "Exact sign test and paired sign-flip permutation test",          scoring = "Restricted",      role = "Supplementary", note = "Supporting nonparametric analyses"),
     "11_ceiling_effects"                  = list(desc = "Ceiling effects analysis",                                       scoring = "Full",            role = "Supplementary", note = ""),
     "12_model_comparison"                 = list(desc = "LME model comparison (full vs reduced)",                        scoring = "Full",            role = "Exploratory",   note = ""),
-    "13_full_vs_restricted_comparison"    = list(desc = "Within-run: full vs restricted scoring â€” means, SDs, r",        scoring = "Full+Restricted", role = "Supplementary", note = "Within-run comparison only"),
+    "13_full_vs_restricted_comparison"    = list(desc = "Within-run: full vs restricted scoring — means, SDs, r",        scoring = "Full+Restricted", role = "Supplementary", note = "Within-run comparison only"),
     "13b_full_vs_restricted_effect_sizes" = list(desc = "Within-run: Cohen's dz under full vs restricted scoring",       scoring = "Full+Restricted", role = "Supplementary", note = "Within-run comparison only"),
     "20_post_hoc_power_analysis"          = list(desc = "Post-hoc paired-test sample sizes by target effect",            scoring = "Restricted",      role = "Supplementary", note = "Uses restricted AI minus No-AI paired differences"),
     # Comparison outputs
     "variant_comparison_restricted_results"             = list(desc = "Cross-run restricted-score summary (all compared variants)",       scoring = "Restricted",      role = "Cross-run",   note = "Core cross-run comparison"),
     "variant_comparison_full_vs_restricted"             = list(desc = "Cross-run: Cohen dz under full vs restricted scoring, per variant", scoring = "Full+Restricted", role = "Cross-run",   note = "Core cross-run comparison"),
-    "variant_comparison_period_effect"                  = list(desc = "Cross-run: Period effect (P2 âˆ’ P1) under restricted scoring",        scoring = "Restricted",      role = "Cross-run",   note = "Period contrast + mixed-model corroboration"),
+    "variant_comparison_period_effect"                  = list(desc = "Cross-run: Period effect (P2 − P1) under restricted scoring",        scoring = "Restricted",      role = "Cross-run",   note = "Period contrast + mixed-model corroboration"),
     "variant_comparison_period_cell_means"              = list(desc = "Cross-run: Period 1/2 cell means by sequence group",               scoring = "Restricted",      role = "Cross-run",   note = "Descriptive cross-run"),
-    "variant_comparison_condition_by_sequence"          = list(desc = "Cross-run: AI vs Control means within each sequence group (descriptive)",   scoring = "Restricted",      role = "Cross-run",   note = "Descriptive within-person contrast by group â€” no inferential statistics"),
-    "variant_comparison_condition_by_sequence_inferential" = list(desc = "Cross-run: within-subject AI vs Control paired contrasts by sequence group", scoring = "Restricted",      role = "Cross-run",   note = "Within-subject paired contrasts only â€” NOT a between-group or moderation test"),
-    "variant_comparison_period_by_sequence"             = list(desc = "Cross-run: within-subject P2 âˆ’ P1 period effect by sequence group",            scoring = "Restricted",      role = "Cross-run",   note = "Within-subject paired contrasts only â€” NOT a between-group or moderation test"),
+    "variant_comparison_condition_by_sequence"          = list(desc = "Cross-run: AI vs Control means within each sequence group (descriptive)",   scoring = "Restricted",      role = "Cross-run",   note = "Descriptive within-person contrast by group — no inferential statistics"),
+    "variant_comparison_condition_by_sequence_inferential" = list(desc = "Cross-run: within-subject AI vs Control paired contrasts by sequence group", scoring = "Restricted",      role = "Cross-run",   note = "Within-subject paired contrasts only — NOT a between-group or moderation test"),
+    "variant_comparison_period_by_sequence"             = list(desc = "Cross-run: within-subject P2 − P1 period effect by sequence group",            scoring = "Restricted",      role = "Cross-run",   note = "Within-subject paired contrasts only — NOT a between-group or moderation test"),
     # variant_comparison_EXPLORATORY_sequence_moderation intentionally not generated.
     # The period-specific / between-sequence table (Table 15) is suppressed from
     # the comparison package. See 08_comparison_figures.R section 8d comment.
@@ -373,10 +373,15 @@ local({
   .session_path <- file.path(.run_audit_dir, "session_info.txt")
   writeLines(capture.output(utils::sessionInfo()), .session_path)
 
-  .git_hash <- tryCatch(
-    system2("git", c("-C", PROJ_ROOT, "rev-parse", "HEAD"), stdout = TRUE, stderr = FALSE),
-    error = function(e) NA_character_
-  )
+  .git_hash <- if (dir.exists(file.path(PROJ_ROOT, ".git"))) {
+    tryCatch(
+      system2("git", c("-C", PROJ_ROOT, "rev-parse", "HEAD"),
+              stdout = TRUE, stderr = FALSE),
+      error = function(e) NA_character_
+    )
+  } else {
+    NA_character_
+  }
   if (length(.git_hash) == 0) .git_hash <- NA_character_
 
   .validations <- character(0)

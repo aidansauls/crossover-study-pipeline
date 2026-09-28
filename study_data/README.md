@@ -47,8 +47,8 @@ Notes:
 - `Intervention_Order` and `Control_Order` must both be present and must be inverses
   of each other for every participant. The pipeline will error if either is missing
   or contains an unrecognized value.
-- An optional `Email` column is silently removed before analysis and saved to
-  `outputs/<study>/InternalUse/participant_email_map.csv`.
+- Keep direct identifiers (including names, email addresses, phone numbers, and
+  contact details) out of analysis CSVs. Use anonymous study IDs only.
 
 ---
 
@@ -148,62 +148,14 @@ Outputs will appear in `outputs/example_data/`.
 
 ---
 
-## Reproducing the named pilot runs
+## Public repository and reviewer-package boundary
 
-The three named runs committed to this repository all use the same source CSVs
-(`study_data/PilotData_N15/`). The differences between them are the item
-exclusions applied at analysis time — exclusions are computed in R and do not
-require separate data files.
+Only `example_data/` is public and tracked. Real-study subdirectories are ignored
+by Git and must remain local. Study-specific resolved configuration is written to
+`outputs/<study>/run_provenance/effective_config.yml`, not to this directory.
 
-### Run 1 — full scoring (no Y-item exclusions)
-
-```powershell
-$env:STUDY_NAME      = "PilotData_N15"
-$env:STUDY_DATA_PATH = "study_data\PilotData_N15"
-$env:ITEM_EXCLUSIONS = ""
-$env:ANALYSIS_MODULES = "all"
-& "C:\Program Files\R\R-4.5.2\bin\Rscript.exe" --vanilla R\run_all.R
-```
-
-Outputs → `outputs/PilotData_N15/`
-
-### Run 2 — Y1 excluded
-
-```powershell
-$env:STUDY_NAME      = "PilotData_N15_excl_y1"
-$env:STUDY_DATA_PATH = "study_data\PilotData_N15"
-$env:ITEM_EXCLUSIONS = "y1"
-$env:ANALYSIS_MODULES = "all"
-& "C:\Program Files\R\R-4.5.2\bin\Rscript.exe" --vanilla R\run_all.R
-```
-
-Outputs → `outputs/PilotData_N15_excl_y1/`
-
-### Run 3 — Y1 and Y6 excluded
-
-```powershell
-$env:STUDY_NAME      = "PilotData_N15_excl_y1_y6"
-$env:STUDY_DATA_PATH = "study_data\PilotData_N15"
-$env:ITEM_EXCLUSIONS = "y1, y6"
-$env:ANALYSIS_MODULES = "all"
-& "C:\Program Files\R\R-4.5.2\bin\Rscript.exe" --vanilla R\run_all.R
-```
-
-Outputs → `outputs/PilotData_N15_excl_y1_y6/`
-
-### Comparison figures
-
-After all three runs complete, generate side-by-side comparison panels:
-
-```powershell
-$env:COMPARISON_CONFIG = "config\Comparison_Y1_Y1&Y6_Excluded.yml"
-& "C:\Program Files\R\R-4.5.2\bin\Rscript.exe" --vanilla R\run_comparison.R
-```
-
-Outputs → `outputs/Comparison_Y1_Y1&Y6_Excluded/`
-
-> **Note on the R path**: The commands above use the full path to `Rscript.exe`
-> as installed in the pilot environment. Adjust if your R installation is in a
-> different location, or if `Rscript` is in your system `PATH`.
-> You can also use `RunPipeline.bat` (menu option 1 or 2 for the main pipeline,
-> option 9 for comparison figures); the BAT auto-detects your R installation.
+For an authorized manuscript run, the explicit reviewer-package builder can copy
+the validated deidentified inputs, resolved configuration, anonymized required
+code, expected manuscript outputs, and checksums into a local ZIP. That package
+is also ignored by Git. Identified source data must be stored separately and must
+never be used as reviewer-package input.

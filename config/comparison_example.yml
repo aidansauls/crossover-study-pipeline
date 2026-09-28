@@ -1,0 +1,16 @@
+# Generic example for comparing two completed synthetic/example runs.
+# Run names must match existing subdirectories under outputs/.
+comparison:
+  runs:
+    - name: "example_variant_a"
+      label: "Baseline scoring"
+    - name: "example_variant_b"
+      label: "Alternative scoring"
+  layout: "side_by_side"
+  output_name: "comparison_example"
+  figure_groups: "all"
+  label_font_size: 28
+  dpi: 300
+  common_scale: false
+  source_data_name: "example_data"
+  primary_run: "example_variant_a"

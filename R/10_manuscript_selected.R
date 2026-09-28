@@ -27,9 +27,6 @@ dat <- tryCatch(load_rds("analysis_data"), error = function(e) NULL)
 .out_root <- file.path(PROJ_ROOT, "outputs", STUDY_NAME)
 .sel_root <- file.path(.out_root, "manuscript_selected")
 
-.reference_cfg <- cfg$reference_analysis %||% list()
-.reference_output_label <- .reference_cfg$output_label %||% "Reference"
-
 .disallowed_path_terms <- c(
   intToUtf8(c(65, 108, 101, 120)),
   intToUtf8(c(97, 108, 101, 120)),
@@ -45,95 +42,16 @@ dat <- tryCatch(load_rds("analysis_data"), error = function(e) NULL)
 .disallowed_path_regex <- paste(.disallowed_path_terms, collapse = "|")
 .disallowed_text_regex <- paste(.disallowed_text_terms, collapse = "|")
 
-.remove_generated_dir <- function(target, root) {
-  root_norm <- normalizePath(root, winslash = "/", mustWork = FALSE)
-  target_norm <- normalizePath(target, winslash = "/", mustWork = FALSE)
-  if (dir.exists(target) && startsWith(target_norm, paste0(root_norm, "/"))) {
-    unlink(target, recursive = TRUE, force = TRUE)
-  }
+
+# This directory is entirely generated. Rebuild it from scratch so files from
+# earlier manuscript versions cannot survive a new run.
+.out_norm <- normalizePath(.out_root, winslash = "/", mustWork = FALSE)
+.sel_norm <- normalizePath(.sel_root, winslash = "/", mustWork = FALSE)
+if (!startsWith(.sel_norm, paste0(.out_norm, "/")) ||
+    identical(.sel_norm, .out_norm)) {
+  stop("Refusing to reset manuscript_selected outside the study output folder.")
 }
-
-.remove_generated_file <- function(target, root) {
-  root_norm <- normalizePath(root, winslash = "/", mustWork = FALSE)
-  target_norm <- normalizePath(target, winslash = "/", mustWork = FALSE)
-  if (file.exists(target) && startsWith(target_norm, paste0(root_norm, "/"))) {
-    unlink(target, force = TRUE)
-  }
-}
-
-.remove_generated_flat_files <- function(target_dir, root) {
-  root_norm <- normalizePath(root, winslash = "/", mustWork = FALSE)
-  dir_norm <- normalizePath(target_dir, winslash = "/", mustWork = FALSE)
-  if (!dir.exists(target_dir) ||
-      !(identical(dir_norm, root_norm) || startsWith(dir_norm, paste0(root_norm, "/")))) {
-    return(invisible(FALSE))
-  }
-  flat <- list.files(target_dir, full.names = TRUE, recursive = FALSE,
-                     all.files = TRUE, no.. = TRUE)
-  flat <- flat[file.exists(flat) & !dir.exists(flat)]
-  unlink(flat, force = TRUE)
-  invisible(TRUE)
-}
-
-invisible(lapply(
-  file.path(
-    .sel_root,
-    c(
-      paste0(intToUtf8(c(97, 108, 101, 120)), "_style_reference"),
-      "reference_style_reference",
-      "supplement/audit"
-    )
-  ),
-  .remove_generated_dir,
-  root = .sel_root
-))
-
-invisible(lapply(
-  c(.sel_root, file.path(.sel_root, c("main_body", "supplement"))),
-  .remove_generated_flat_files,
-  root = .sel_root
-))
-
-invisible(lapply(
-  file.path(
-    .sel_root,
-    c(
-      "supplement/figures/figure_s7_permutation_null_two_tailed.png",
-      "supplement/figures/figure_s8_permutation_null_one_tailed.png",
-      "supplement/figures/figure_s2_post_hoc_power_curve.png",
-      "supplement/figures/figure_s3_condition_score_histogram_restricted.png",
-      "supplement/figures/figure_s4_sequence_difference_histogram_restricted.png",
-      "supplement/figures/figure_s5_paired_difference_histogram.png",
-      "supplement/figures/figure_s6_paired_difference_dotplot_restricted.png",
-      "supplement/figures/figure_s7_permutation_null_two_sided.png",
-      "supplement/figures/figure_s8_permutation_null_one_sided.png",
-      "main_body/figures/figure2_item_endorsement_by_sequence.png",
-      "main_body/figures/figure3_post_hoc_power_curve.png",
-      "supplement/tables/table_s2b_permutation_one_tailed.csv",
-      "supplement/tables/table_s2b_permutation_one_tailed.png",
-      "supplement/tables/table_s2b_permutation_one_sided.csv",
-      "supplement/tables/table_s2b_permutation_one_sided.png",
-      "supplement/tables/table_s4_full_descriptive_statistics.csv",
-      "supplement/tables/table_s4_full_descriptive_statistics.png",
-      "supplement/tables/table_s5_primary_contrasts_full_and_restricted.csv",
-      "supplement/tables/table_s5_primary_contrasts_full_and_restricted.png",
-      "supplement/tables/table_s6_item_endorsement_rates.csv",
-      "supplement/tables/table_s6_item_endorsement_rates.png",
-      "supplement/tables/table_s6_primary_contrasts_full_and_restricted.csv",
-      "supplement/tables/table_s6_primary_contrasts_full_and_restricted.png",
-      "supplement/tables/table_s7_item_endorsement_rates.csv",
-      "supplement/tables/table_s7_item_endorsement_rates.png",
-      "supplement/tables/table_s5_descriptive_scores_rescaled_0_10.csv",
-      "supplement/tables/table_s5_descriptive_scores_rescaled_0_10.png",
-      "reference_analysis_style/tables/condition_descriptive_table_reference_style.csv",
-      "reference_analysis_style/tables/condition_descriptive_table_reference_style.png",
-      "reference_analysis_style/figures/permutation_null_two_tailed_reference_style.png",
-      "reference_analysis_style/figures/permutation_null_one_tailed_reference_style.png"
-    )
-  ),
-  .remove_generated_file,
-  root = .sel_root
-))
+if (dir.exists(.sel_root)) unlink(.sel_root, recursive = TRUE, force = TRUE)
 
 .dirs <- file.path(
   .sel_root,
@@ -141,9 +59,7 @@ invisible(lapply(
     "main_body/figures",
     "main_body/tables",
     "supplement/figures",
-    "supplement/tables",
-    "reference_analysis_style/figures",
-    "reference_analysis_style/tables"
+    "supplement/tables"
   )
 )
 invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
@@ -489,7 +405,6 @@ if (is.null(dat)) {
   stop("analysis_data.rds is unavailable. Run the score calculation/import steps first.")
 }
 
-.ref_role <- "Reference"
 .ref_scoring <- .ref_analysis$scoring %||% "restricted"
 .scale_to <- as.numeric(score_meta$scale_to %||% cfg$scores$scale_to %||% 10)
 .scale_to_label <- format(.scale_to, trim = TRUE, scientific = FALSE)
@@ -1153,11 +1068,6 @@ if (.generate_flow_selected) {
     "Participant allocation and 2 x 2 crossover counterbalancing schematic.",
     "Supplement", "Figure S1"
   )
-} else {
-  .remove_generated_file(
-    file.path(.sel_root, "supplement/figures/figure_s1_participant_flow.png"),
-    .sel_root
-  )
 }
 .write_selected_table(
   .power_table,
@@ -1235,157 +1145,6 @@ if (.generate_flow_selected) {
 )
 
 # ---------------------------------------------------------------------------
-# Reference output set.
-# ---------------------------------------------------------------------------
-.write_selected_table(
-  .condition_desc_tbl,
-  "reference_analysis_style/tables/condition_percent_descriptive_table_reference_style.csv",
-  "reference_analysis_style/tables/condition_percent_descriptive_table_reference_style.png",
-  NULL,
-  paste0("Reference-style condition descriptive table using percent correct; Table S5 is the separate ",
-         .score_metric_short, " manuscript table."),
-  .ref_role, "Condition percent descriptive table",
-  "rds/analysis_results.rds"
-)
-.write_selected_table(
-  .paired_desc_tbl,
-  "reference_analysis_style/tables/paired_difference_descriptive_table_reference_style.csv",
-  "reference_analysis_style/tables/paired_difference_descriptive_table_reference_style.png",
-  NULL,
-  "Paired difference table for AI-assisted minus No-AI.",
-  .ref_role, "Paired difference table",
-  "rds/analysis_results.rds"
-)
-.write_selected_table(
-  .sequence_desc_tbl,
-  "reference_analysis_style/tables/sequence_difference_table_reference_style.csv",
-  "reference_analysis_style/tables/sequence_difference_table_reference_style.png",
-  paste0("Reference sequence table. Scores and paired differences use the ",
-         .score_metric_short, " metric"),
-  paste0("Sequence difference table using randomized-sequence labels; scores and paired differences use the ",
-         .score_metric_short, " metric."),
-  .ref_role, "Sequence difference table",
-  "rds/analysis_results.rds"
-)
-.write_selected_table(
-  .sign_tbl,
-  "reference_analysis_style/tables/sign_test_table_reference_style.csv",
-  "reference_analysis_style/tables/sign_test_table_reference_style.png",
-  NULL,
-  "Exact sign test plus two-sided and exploratory one-sided Fisher-Pitman permutation tests.",
-  .ref_role, "Sign test table",
-  "rds/analysis_results.rds"
-)
-.write_selected_table(
-  .power_table,
-  "reference_analysis_style/tables/post_hoc_power_table_reference_style.csv",
-  "reference_analysis_style/tables/post_hoc_power_table_reference_style.png",
-  NULL,
-  paste0("Post hoc power table using the configured ",
-         .power$target_power_label, " target."),
-  .ref_role, "Power table",
-  "tables/supplementary/20_post_hoc_power_analysis.csv"
-)
-.write_selected_table(
-  .glmm_compact_tbl,
-  "reference_analysis_style/tables/glmm_results_table_reference_style.csv",
-  "reference_analysis_style/tables/glmm_results_table_reference_style.png",
-  NULL,
-  "Compact GLMM table using odds ratios and OR-scale 95% CIs.",
-  .ref_role, "GLMM results table",
-  "rds/analysis_results.rds"
-)
-
-.glmm_details_rel <- "reference_analysis_style/tables/glmm_full_model_details_reference_style.md"
-.glmm_details_path <- file.path(.sel_root, .glmm_details_rel)
-.glmm_lines <- c(
-  "# GLMM Full Model Details",
-  "",
-  "Full item-level logistic mixed-model details for the compact GLMM table.",
-  "",
-  "Models use the configured item exclusions and display labels.",
-  ""
-)
-for (.model_name in names(.ref_analysis$logistic_models$models)) {
-  .model_info <- .ref_analysis$logistic_models$models[[.model_name]]
-  .model <- .model_info$model %||% .model_info
-  .glmm_lines <- c(
-    .glmm_lines,
-    paste0("## ", tools::toTitleCase(.model_name), " model"),
-    "",
-    paste0("- Label: ", .model_info$label %||% tools::toTitleCase(.model_name)),
-    paste0("- Formula: ", paste(.model_info$formula %||% stats::formula(.model),
-                                collapse = " ")),
-    paste0("- Interpretation: ", .model_info$interpretation %||% ""),
-    paste0("- AIC: ", .fmt3(stats::AIC(.model))),
-    paste0("- BIC: ", .fmt3(stats::BIC(.model))),
-    "",
-    "```text",
-    utils::capture.output(summary(.model)),
-    "```",
-    ""
-  )
-}
-writeLines(.glmm_lines, .glmm_details_path, useBytes = TRUE)
-.add_record(
-  .glmm_details_rel,
-  "rds/analysis_results.rds",
-  "Full GLMM model details, including model fit statistics and console summaries.",
-  .ref_role, "GLMM full details"
-)
-
-.save_selected_plot(
-  .condition_hist_plot,
-  "reference_analysis_style/figures/condition_score_histogram_reference_style.png",
-  "Overlaid condition histograms using percent correct and relative frequency.",
-  .ref_role, "Condition histogram",
-  source_rel = "rds/analysis_data.rds",
-  width = 7.5, height = 5
-)
-.copy_selected(
-  "figures/supplementary/sequence_difference_histogram_restricted.png",
-  "reference_analysis_style/figures/sequence_difference_histogram_reference_style.png",
-  "Sequence difference histogram with corrected sequence labels.",
-  .ref_role, "Sequence histogram"
-)
-.save_selected_plot(
-  .paired_diff_plot,
-  "reference_analysis_style/figures/paired_difference_histogram_reference_style.png",
-  "Paired-difference histogram using signed percentage-point differences.",
-  .ref_role, "Paired difference histogram",
-  source_rel = "rds/analysis_data.rds",
-  width = 7.5, height = 5
-)
-.save_selected_plot(
-  .plot_null_distribution("two.sided"),
-  "reference_analysis_style/figures/permutation_null_two_sided_reference_style.png",
-  "Two-sided Fisher-Pitman permutation-test null distribution.",
-  .ref_role, "Two-sided permutation null",
-  width = 7.5, height = 5
-)
-.save_selected_plot(
-  .plot_null_distribution("greater"),
-  "reference_analysis_style/figures/permutation_null_one_sided_reference_style.png",
-  "One-sided Fisher-Pitman permutation-test null distribution.",
-  .ref_role, "One-sided permutation null",
-  width = 7.5, height = 5
-)
-.save_selected_plot(
-  .slope_plot,
-  "reference_analysis_style/figures/paired_slope_plot_reference_style.png",
-  "Participant-level paired slope plot with X/Y endpoint form labels and a paired-difference uncertainty wedge.",
-  .ref_role, "Paired slope plot",
-  source_rel = "rds/analysis_data.rds",
-  width = 7.5, height = 5
-)
-.copy_selected(
-  "figures/supplementary/post_hoc_power_curve.png",
-  "reference_analysis_style/figures/post_hoc_power_curve_reference_style.png",
-  "Post hoc power curve corrected to 80% target power.",
-  .ref_role, "Power curve"
-)
-
-# ---------------------------------------------------------------------------
 # README and validation manifest.
 # ---------------------------------------------------------------------------
 .manifest <- do.call(rbind, .records)
@@ -1420,13 +1179,10 @@ writeLines(.glmm_lines, .glmm_details_path, useBytes = TRUE)
   "- `main_body/tables/`",
   "- `supplement/figures/`",
   "- `supplement/tables/`",
-  "- `reference_analysis_style/figures/`",
-  "- `reference_analysis_style/tables/`",
   "",
   .section_lines("Main", "Main manuscript candidates"),
   .section_lines("Supplement", "Supplementary manuscript candidates"),
-  .section_lines(.ref_role, "Reference outputs"),
-  "## Known differences from the reference R Markdown report",
+  "## Reproducibility notes",
   "",
   "- Visible labels use AI-assisted/No-AI terminology where appropriate.",
   paste0("- Power calculations use the configured target of ",
@@ -1516,6 +1272,27 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
 .validate_public_selected_labels(.sel_root)
 
 .validate_selected_manuscript_structure <- function(root) {
+  top_dirs <- sort(basename(list.dirs(root, recursive = FALSE, full.names = TRUE)))
+  expected_top_dirs <- c("main_body", "supplement")
+  if (!identical(top_dirs, expected_top_dirs)) {
+    stop(
+      "manuscript_selected contains unexpected top-level directories.\n",
+      "Expected: ", paste(expected_top_dirs, collapse = ", "), "\n",
+      "Actual: ", paste(top_dirs, collapse = ", ")
+    )
+  }
+
+  for (section in expected_top_dirs) {
+    section_dirs <- sort(basename(list.dirs(
+      file.path(root, section), recursive = FALSE, full.names = TRUE
+    )))
+    if (!identical(section_dirs, c("figures", "tables"))) {
+      stop(
+        section, " contains unexpected directories. Expected only figures and tables."
+      )
+    }
+  }
+
   main_figs <- sort(gsub(
     "\\\\", "/",
     list.files(file.path(root, "main_body", "figures"),

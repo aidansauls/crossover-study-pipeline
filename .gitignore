@@ -33,6 +33,15 @@ study_data/*/
 !study_data/example_data/**
 !study_data/README.md
 
+# Additional local-only locations for sensitive data and submission bundles.
+/private_data/
+/identified_data/
+/submission_private/
+/AppendixI_ReviewerReproducibilityFiles/
+/AppendixI_ReviewerReproducibilityFiles.zip
+/R/12_build_reviewer_package.R
+/tools/reviewer/
+
 # ── Analysis outputs ───────────────────────────────────────────────────────────
 # Block ALL subfolders of outputs/.  Only outputs/README.md is tracked.
 outputs/*/

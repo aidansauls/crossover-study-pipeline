@@ -6,7 +6,7 @@
 ##   3. Period effects (practice, carryover via Grizzle test)
 ##   4. Sequence x period interaction
 ##   5. Linear mixed-effects models
-## Copyright (c) 2026 Aidan Sauls â€” see LICENSE for terms.
+## Copyright (c) 2026 Aidan Sauls — see LICENSE for terms.
 ## =============================================================================
 
 .script_dir <- local({
@@ -685,7 +685,7 @@ if (!is.null(contrast_period_restr)) log_paired_result(contrast_period_restr)
 # 4. CARRYOVER TEST (Grizzle 1965)
 # The standard crossover carryover test compares Period-1 scores between
 # sequence groups. Significant difference suggests carryover.
-# Requires â‰¥ min_n_carryover per group (set in config).
+# Requires ≥ min_n_carryover per group (set in config).
 # =============================================================================
 log_h2("Carryover test (Grizzle)")
 
@@ -880,7 +880,7 @@ for (.spi in list(seq_period_full, seq_period_restr)) {
 # their Period-1 score and control is Period-2.  For the control-first (BA)
 # group the intervention score is their Period-2 score and control is Period-1.
 # We compare the within-person intervention-vs-control DIFFERENCE between the
-# two sequence groups â€” a significant difference means the period in which
+# two sequence groups — a significant difference means the period in which
 # the intervention occurred moderates(amplifies/dampens) the effect.
 # =============================================================================
 log_h2("Period-specific intervention effect (period when int. occurred)")
@@ -976,7 +976,7 @@ for (.pi in list(period_int_full, period_int_restr)) {
 
 # =============================================================================
 # 5c. 4-SUBGROUP CONTRASTS
-# For each of the four subgroups (seq Ã— int-form), compute
+# For each of the four subgroups (seq × int-form), compute
 # the intervention-vs-control contrast. Allows checking whether the
 # intervention effect is consistent across all four subgroup configurations.
 # =============================================================================
@@ -1156,7 +1156,7 @@ if (requireNamespace("lme4", quietly = TRUE) &&
   }
   
 } else {
-  log_warn("lme4/lmerTest not available â€” mixed models skipped.")
+  log_warn("lme4/lmerTest not available — mixed models skipped.")
   log_warn("Install with: install.packages(c('lme4', 'lmerTest'))")
 }
 

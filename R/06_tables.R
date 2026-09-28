@@ -1,8 +1,8 @@
 ## =============================================================================
 ## R/06_tables.R
-## All publication tables â€” CSV + PNG output.
+## All publication tables — CSV + PNG output.
 ## Tables have no embedded titles (add in manuscript).
-## Copyright (c) 2026 Aidan Sauls â€” see LICENSE for terms.
+## Copyright (c) 2026 Aidan Sauls — see LICENSE for terms.
 ## =============================================================================
 
 .script_dir <- local({
@@ -114,7 +114,7 @@ tbl2 <- results$descriptives |>
     `Median [IQR]` = paste0(round(.data$Median, 2),
                              " [", round(.data$IQR_lo, 2),
                              ", ", round(.data$IQR_hi, 2), "]"),
-    `Range` = paste0(round(.data$Min, 2), "â€“", round(.data$Max, 2)),
+    `Range` = paste0(round(.data$Min, 2), "–", round(.data$Max, 2)),
     `Ceiling %` = paste0(round(.data$`Ceiling (perfect)` * 100, 1), "%"),
     `Floor %`   = paste0(round(.data$`Floor (zero)` * 100, 1), "%")
   ) |>
@@ -223,10 +223,10 @@ save_table(tbl3, "03_primary_contrasts", subfolder = "primary",
 
 # =============================================================================
 # TABLE 00: OVERALL RESULTS  (primary manuscript table)
-# Two rows: AI vs Control, Period 2 vs Period 1 â€” restricted scoring.
+# Two rows: AI vs Control, Period 2 vs Period 1 — restricted scoring.
 # A = AI condition / Period 2;  B = Control condition / Period 1.
 # =============================================================================
-log_h2("Table 00: Overall results â€” primary manuscript table (restricted scoring)")
+log_h2("Table 00: Overall results — primary manuscript table (restricted scoring)")
 
 .restr_label <- {
   .y_excl <- as.character(unlist(cfg$item_exclusions[["y"]] %||% list()))
@@ -261,7 +261,7 @@ if (!is.null(.t00_mm)) {
 
 # Single rectangular table: one row per contrast (condition + period).
 # Columns: Contrast | Group A | Mean A (SD) | Group B | Mean B (SD) |
-#          Mean Diff (A âˆ’ B) | 95% CI | Cohen dz | paired p | MM Est (SE) | MM p
+#          Mean Diff (A − B) | 95% CI | Cohen dz | paired p | MM Est (SE) | MM p
 # Condition labels (Group A / Group B) are config-driven via int_label / ctl_label.
 # Period labels are fixed structural terminology.
 .tbl0_caption <- paste0(
@@ -353,7 +353,7 @@ if (!is.null(tbl0) && nrow(tbl0) > 0) {
 # =============================================================================
 # TABLE 00b: STUDY DESIGN  (crossover assignment structure)
 # One row per randomised assignment cell (Sequence group x Form order).
-# Reads assignment.csv directly â€” static design metadata, not derived from dat.
+# Reads assignment.csv directly — static design metadata, not derived from dat.
 # =============================================================================
 log_h2("Table 00b: Study design \u2014 crossover assignment structure")
 
@@ -479,7 +479,7 @@ save_table(tbl4_seq, "04b_sequence_period_interaction", subfolder = "period_effe
 # which additionally includes Point-Biserial r.  That version is richer and should be used
 # directly.  T5 is not written to avoid the ambiguous duplicate.
 # =============================================================================
-log_h2("Table 5: Item analysis summary [SUPPRESSED â€” see psychometrics/item_analysis_full]")
+log_h2("Table 5: Item analysis summary [SUPPRESSED — see psychometrics/item_analysis_full]")
 log_line("T5 (05_item_analysis_summary) suppressed: psychometrics/item_analysis_full from 03_psychometrics.R is the canonical version and includes Point-Biserial r.")
 
 # =============================================================================
@@ -487,7 +487,7 @@ log_line("T5 (05_item_analysis_summary) suppressed: psychometrics/item_analysis_
 # =============================================================================
 log_h2("Table 6: Reliability")
 
-fmt_omega <- function(x) if (!is.na(x) && !is.null(x)) round(x, 3) else "â€”"
+fmt_omega <- function(x) if (!is.na(x) && !is.null(x)) round(x, 3) else "—"
 
 make_rel_row <- function(rel) {
   tibble::tibble(
@@ -638,7 +638,7 @@ if (!is.null(tbl8) && nrow(tbl8) > 0) {
 }
 
 # =============================================================================
-# TABLE 9: 2Ã—2 cell means (Period Ã— Sequence group)
+# TABLE 9: 2×2 cell means (Period × Sequence group)
 # =============================================================================
 log_h2("Table 8b: Paired difference/effect-size summary")
 
@@ -731,7 +731,7 @@ save_table(tbl9, "09_period_condition_cell_means", subfolder = "descriptive",
            notes = score_note)
 
 # =============================================================================
-# TABLE 10: Normality tests (Shapiro-Wilk) â€” conditional on config flag
+# TABLE 10: Normality tests (Shapiro-Wilk) — conditional on config flag
 # =============================================================================
 .run_norm <- isTRUE(cfg_get("optional_analyses", "run_normality_tests", default = TRUE))
 
@@ -799,7 +799,7 @@ if (.run_norm) {
 }
 
 # =============================================================================
-# TABLE 11: Time analysis â€” conditional on data + config flag
+# TABLE 11: Time analysis — conditional on data + config flag
 # =============================================================================
 .run_time  <- isTRUE(cfg_get("optional_analyses", "run_time_analysis", default = TRUE))
 .has_tx    <- "time_taken_x_sec" %in% names(dat)
@@ -856,7 +856,7 @@ if (.run_time && (.has_tx || .has_ty)) {
 }
 
 # =============================================================================
-# TABLE 12: LME model comparison (AIC/BIC/LRT) â€” conditional
+# TABLE 12: LME model comparison (AIC/BIC/LRT) — conditional
 # =============================================================================
 .run_mc   <- isTRUE(cfg_get("optional_analyses", "run_model_comparison", default = TRUE))
 .m1_avail <- !is.null(results$mixed_models$full$model1 %||% results$mixed_models$model1)
@@ -890,7 +890,7 @@ if (.run_mc && .m1_avail && .m2_avail) {
 }
 
 # =============================================================================
-# TABLE 13: Full vs restricted scoring comparison â€” conditional
+# TABLE 13: Full vs restricted scoring comparison — conditional
 # =============================================================================
 .run_restr <- isTRUE(cfg_get("optional_analyses", "run_restricted_comparison", default = TRUE))
 .has_restr <- !is.null(results$contrast_intervention_restr) &&
@@ -937,7 +937,7 @@ if (.run_restr && .has_restr) {
       )
     )
     save_table(tbl13, "13_full_vs_restricted_comparison", subfolder = "supplementary",
-               caption = "Within-run comparison: full vs restricted scoring â€” means, SDs, and correlation (same dataset, same participants)")
+               caption = "Within-run comparison: full vs restricted scoring — means, SDs, and correlation (same dataset, same participants)")
     save_table(.es_block, "13b_full_vs_restricted_effect_sizes", subfolder = "supplementary",
                caption = "Within-run comparison: Cohen's dz for intervention effect under full vs restricted scoring (same dataset)")
   } else {
@@ -952,7 +952,7 @@ if (.run_restr && .has_restr) {
 # =============================================================================
 # TABLE 14: 4-subgroup descriptive statistics
 # Breaks down Int / Ctl mean, SD, median, ceiling%, floor% for each of the
-# four sequence Ã— form subgroups. Useful for spotting ceiling effects and
+# four sequence × form subgroups. Useful for spotting ceiling effects and
 # differential performance driven by which form was the intervention form.
 # =============================================================================
 log_h2("Table 14: 4-subgroup descriptive statistics")
@@ -1001,7 +1001,7 @@ if ("subgroup4" %in% names(dat)) {
 # =============================================================================
 # TABLE 15: Period-specific intervention effect
 # Was the intervention more effective when it occurred in Period 1 vs
-# Period 2?  Shows mean(Intâˆ’Ctl) for each half plus the between-group test.
+# Period 2?  Shows mean(Int−Ctl) for each half plus the between-group test.
 # =============================================================================
 log_h2("Table 15: Period-specific intervention effect")
 
@@ -1212,7 +1212,7 @@ if (!is.null(.psych_rds) &&
 # =============================================================================
 # TABLE 18: Ability-stratified item difficulty
 # P(correct) for each item broken out by ability stratum (tertile or quartile).
-# Documents ceiling effects at the item level â€” "Did high-scorers find
+# Documents ceiling effects at the item level — "Did high-scorers find
 # every item trivially easy?" and flags for non-monotone patterns.
 # =============================================================================
 log_h2("Table 18: Ability-stratified item difficulty")

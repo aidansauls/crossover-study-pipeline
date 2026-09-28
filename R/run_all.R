@@ -53,7 +53,12 @@ if (is.na(this_file) || !nzchar(this_file)) {
 
 # Ensure r_dir points to the R/ folder inside the project root
 if (basename(r_dir) != "R") r_dir <- file.path(r_dir, "R")
-proj_root <- dirname(r_dir)
+.project_root_override <- Sys.getenv("PIPELINE_PROJECT_ROOT", unset = "")
+proj_root <- normalizePath(
+  if (nzchar(.project_root_override)) .project_root_override else dirname(r_dir),
+  winslash = "/",
+  mustWork = FALSE
+)
 
 R_script <- function(name) file.path(r_dir, name)
 
@@ -307,3 +312,7 @@ if (.run_publication && .publication_enabled) {
 
 if (!is.null(.publication_err)) quit(status = 1, save = "no")
 if (n_err > 0) quit(status = 1, save = "no")
+
+if (exists("write_effective_config", envir = .GlobalEnv)) {
+  write_effective_config()
+}

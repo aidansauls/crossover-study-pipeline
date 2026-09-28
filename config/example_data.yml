@@ -53,12 +53,6 @@ publication_outputs:
     - "supporting_analysis_summary"
   include_supplementary_figures: true
   include_supplementary_tables: true
-  include_reference_outputs: false
-
-reference_analysis:
-  enabled: true
-  output_label: "Reference-analysis style"
-  output_prefix: "reference"
 
 display_labels:
   condition_control: "No-AI"

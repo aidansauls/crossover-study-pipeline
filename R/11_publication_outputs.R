@@ -276,19 +276,6 @@ if (!.pub_enabled) {
     )
   }
 
-  if (isTRUE(.pub_cfg$include_reference_outputs %||% FALSE)) {
-    .copy_tree(
-      "manuscript_selected/reference_analysis_style/figures",
-      "supplementary_figures/reference_analysis_style", "[.]png$",
-      "Reference figure"
-    )
-    .copy_tree(
-      "manuscript_selected/reference_analysis_style/tables",
-      "supplementary_tables/reference_analysis_style", "[.](csv|png|md)$",
-      "Reference table"
-    )
-  }
-
   .manifest <- if (length(.records)) {
     do.call(rbind, .records)
   } else {

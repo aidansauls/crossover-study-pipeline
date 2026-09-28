@@ -10,6 +10,13 @@ One subfolder is created per study run, named after the `study.name` in the conf
 ```
 outputs/
   my_study/
+    manuscript_selected/ # Final manuscript-only main/supplement tree
+      main_body/
+        figures/
+        tables/
+      supplement/
+        figures/
+        tables/
     publication_outputs/ # Easy-to-find main figures/tables + optional supplements
       main_figures/
       main_tables/
@@ -19,6 +26,7 @@ outputs/
     tables/           CSV tables
     tables_png/       Formatted PNG versions of tables
     logs/             run.log, session JSON, and SUMMARY.txt
+    run_provenance/   effective_config.yml (resolved after runtime overrides)
     rds/              Intermediate R objects (reuse with REUSE_DATA=1)
     InternalUse/      Participant-identifiable files (never share)
 ```
@@ -29,6 +37,9 @@ three selected main tables, plus all remaining canonical figures and tables as
 supplementary material. The canonical folders remain unchanged.
 When `figures.power_curve.export_pdf` is enabled (the default), the main power
 figure is also provided as a vector PDF alongside its high-resolution PNG.
+
+`manuscript_selected/` is rebuilt from scratch and contains only finalized main
+and supplementary manuscript files plus its README and validation manifest.
 
 ## REUSE_DATA
 

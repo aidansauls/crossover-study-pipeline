@@ -37,7 +37,7 @@ Real participant data is kept entirely outside this repository and must never be
 | Pipeline code | `R/` |
 | Example dataset (100 synthetic participants) | `study_data/example_data/` |
 | Example dataset config | `config/example_data.yml` |
-| Comparison configs | `config/` (see [Canonical configs](#canonical-configs) below) |
+| Generic comparison example | [`config/comparison_example.yml`](config/comparison_example.yml) |
 | Documentation | `README.md`, `config/README.md`, `study_data/README.md` |
 | Launcher scripts | `RunPipeline.bat`, `Run-Pipeline.ps1` |
 
@@ -64,18 +64,19 @@ See [`study_data/README.md`](study_data/README.md) for instructions on placing a
 
 When in doubt: run `git status` and inspect `git diff --cached` before every push.
 
-### Canonical configs
+### Public configs
 
 | Purpose | File |
 |---|---|
 | Run the example dataset (public, safe) | [`config/example_data.yml`](config/example_data.yml) |
-| Canonical research comparison (local only — references local run outputs) | [`config/Comparison_Y1_Y1&Y6_Excluded.yml`](config/Comparison_Y1_Y1&Y6_Excluded.yml) |
+| Generic reusable template | [`config/study_config.yml`](config/study_config.yml) |
+| Generic comparison example | [`config/comparison_example.yml`](config/comparison_example.yml) |
 | Archived / superseded configs | `config/archive/` |
 
-The canonical comparison config references two runs (`PilotData_N15_excl_y1` and
-`PilotData_N15_excl_y1_y6`) whose source data and outputs exist only on the
-researcher's local machine. A fresh clone can verify the pipeline using
-`config/example_data.yml` and the example dataset; see [Quick start](#1-quick-start).
+Study-specific configurations and real participant data are intentionally absent
+from the public repository. A fresh clone can verify the pipeline with
+`config/example_data.yml` and the synthetic example dataset; see
+[Quick start](#1-quick-start).
 
 ---
 
@@ -365,7 +366,6 @@ publication_outputs:
     - "supporting_analysis_summary"
   include_supplementary_figures: true
   include_supplementary_tables: true
-  include_reference_outputs: false
 
 # ============================================================
 # figures:  Visual settings
@@ -558,6 +558,10 @@ contrast, and supporting-analysis summary as the three main tables. Change the
 Set `include_supplementary_figures` or `include_supplementary_tables` to `false`
 to omit either full supplementary tree. Canonical outputs below are retained so
 existing workflows and audit trails are not disturbed.
+
+Every successful run also writes the fully resolved, path-free configuration to
+`outputs/<study_name>/run_provenance/effective_config.yml`, after environment
+overrides such as `ITEM_EXCLUSIONS` have been applied.
 
 ### Figures (`figures/`)
 

@@ -71,7 +71,12 @@ for (.p in .pkgs_optional) {
   normalizePath(getwd(), winslash = "/", mustWork = FALSE)
 }
 
-PROJ_ROOT <- normalizePath(.get_script_dir(), winslash = "/", mustWork = FALSE)
+.project_root_override <- Sys.getenv("PIPELINE_PROJECT_ROOT", unset = "")
+PROJ_ROOT <- normalizePath(
+  if (nzchar(.project_root_override)) .project_root_override else .get_script_dir(),
+  winslash = "/",
+  mustWork = FALSE
+)
 
 # p() builds absolute paths from project root
 p <- function(...) file.path(PROJ_ROOT, ...)
@@ -172,13 +177,7 @@ read_config <- function() {
         "supporting_analysis_summary"
       ),
       include_supplementary_figures = TRUE,
-      include_supplementary_tables = TRUE,
-      include_reference_outputs = FALSE
-    ),
-    reference_analysis = list(
-      enabled = TRUE,
-      output_label = "Reference-analysis style",
-      output_prefix = "reference"
+      include_supplementary_tables = TRUE
     ),
     display_labels = list(
       condition_control = "No-AI",
@@ -210,8 +209,8 @@ read_config <- function() {
       height_in = 5.0,
       dpi = 300,
       setup_label = paste0(
-        "Participants (n = {n}) completed lecture + AI guidance,\n",
-        "then were randomized to sequence order"
+        "Participants (n = {n}) were randomized to sequence before the session\n",
+        "and completed the lecture + AI guidance before Block 1"
       ),
       control_sequence_label = "No-AI first",
       ai_sequence_label = "AI-assisted first",
@@ -221,8 +220,7 @@ read_config <- function() {
       ai_short_label = "AI-assisted study (20 min)",
       period2_control_label = "No-AI study\n(20 min)",
       period2_ai_label = "AI-assisted study\n(20 min)",
-      show_row_labels = FALSE,
-      break_duration = "10-15 min"
+      show_row_labels = FALSE
     ),
     tables = list(
       export_csv = TRUE, export_png = TRUE,
@@ -346,8 +344,53 @@ for (.sf in .subfolders) {
 dir.create(out_path("logs"),         recursive = TRUE, showWarnings = FALSE)
 dir.create(out_path("rds"),          recursive = TRUE, showWarnings = FALSE)
 dir.create(out_path("InternalUse"),  recursive = TRUE, showWarnings = FALSE)
+dir.create(out_path("run_provenance"), recursive = TRUE, showWarnings = FALSE)
 
 rm(.cfg_local, .sf)
+
+#' Write the exact effective configuration after environment overrides.
+#'
+#' The snapshot deliberately excludes machine-specific paths and user details.
+#' It can therefore be copied into a reviewer reproducibility package as a
+#' directly runnable study configuration.
+write_effective_config <- function() {
+  effective <- read_config()
+  if (is.null(effective$study)) effective$study <- list()
+  effective$study$name <- STUDY_NAME
+
+  if (is.null(effective$item_exclusions)) {
+    effective$item_exclusions <- list(x = character(), y = character())
+  }
+  effective$item_exclusions$x <- as.character(unlist(
+    effective$item_exclusions$x %||% character(), use.names = FALSE
+  ))
+  effective$item_exclusions$y <- as.character(unlist(
+    effective$item_exclusions$y %||% character(), use.names = FALSE
+  ))
+  effective$runtime <- list(
+    analysis_modules = Sys.getenv("ANALYSIS_MODULES", unset = "all"),
+    reuse_data = identical(Sys.getenv("REUSE_DATA", unset = "0"), "1"),
+    item_exclusions_override_applied = nzchar(
+      Sys.getenv("ITEM_EXCLUSIONS", unset = "")
+    )
+  )
+
+  values <- as.character(unlist(effective, recursive = TRUE, use.names = FALSE))
+  forbidden <- c(
+    "^[A-Za-z]:[/\\\\]", paste0("^/", "Users/"), "^/home/[^/]+/",
+    "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+[.][A-Za-z]{2,}"
+  )
+  if (any(vapply(forbidden, function(pattern) {
+    any(grepl(pattern, values, perl = TRUE, ignore.case = TRUE))
+  }, logical(1)))) {
+    stop("Effective configuration contains a machine-specific path or email address.")
+  }
+
+  target <- out_path("run_provenance", "effective_config.yml")
+  yaml::write_yaml(effective, target, fileEncoding = "UTF-8")
+  log_line("Effective config: run_provenance/effective_config.yml")
+  invisible(target)
+}
 
 # =============================================================================
 # LOGGING

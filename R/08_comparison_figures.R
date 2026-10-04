@@ -36,11 +36,14 @@ for (.pkg in c("magick", "yaml")) {
 # ---------------------------------------------------------------------------
 if (!exists("proj_root")) {
   proj_root <- normalizePath(
-    tryCatch({
-      args <- commandArgs(trailingOnly = FALSE)
-      f    <- sub("^--file=", "", args[startsWith(args, "--file=")])
-      if (length(f) && nzchar(f[1])) dirname(dirname(f[1])) else "."
-    }, error = function(e) "."),
+    tryCatch(
+      {
+        args <- commandArgs(trailingOnly = FALSE)
+        f <- sub("^--file=", "", args[startsWith(args, "--file=")])
+        if (length(f) && nzchar(f[1])) dirname(dirname(f[1])) else "."
+      },
+      error = function(e) "."
+    ),
     winslash = "/", mustWork = FALSE
   )
 }
@@ -57,26 +60,31 @@ cat("Project root :", proj_root, "\n")
 # 1. Load comparison config
 # ---------------------------------------------------------------------------
 comp_cfg_path <- Sys.getenv("COMPARISON_CONFIG", unset = "")
-if (!nzchar(comp_cfg_path))
-  stop("COMPARISON_CONFIG environment variable not set.\n",
-       "  Example:  $env:COMPARISON_CONFIG = 'config\\comparison_pilot.yml'")
+if (!nzchar(comp_cfg_path)) {
+  stop(
+    "COMPARISON_CONFIG environment variable not set.\n",
+    "  Example:  $env:COMPARISON_CONFIG = 'config\\comparison_pilot.yml'"
+  )
+}
 
-if (!file.exists(comp_cfg_path))
+if (!file.exists(comp_cfg_path)) {
   comp_cfg_path <- file.path(proj_root, comp_cfg_path)
-if (!file.exists(comp_cfg_path))
+}
+if (!file.exists(comp_cfg_path)) {
   stop("Comparison config not found: ", comp_cfg_path)
+}
 
-yml  <- yaml::read_yaml(comp_cfg_path)
+yml <- yaml::read_yaml(comp_cfg_path)
 comp <- yml[["comparison"]]
 if (is.null(comp)) stop("No 'comparison:' section found in ", comp_cfg_path)
 
-runs         <- comp[["runs"]]
-layout       <- comp[["layout"]]        %||% "side_by_side"
-out_name     <- comp[["output_name"]]   %||% "comparison"
-dpi          <- as.integer(comp[["dpi"]] %||% 300)
-label_size   <- as.integer(comp[["label_font_size"]] %||% 28)
-fig_groups       <- comp[["figure_groups"]] %||% "all"
-common_scale     <- isTRUE(comp[["common_scale"]])
+runs <- comp[["runs"]]
+layout <- comp[["layout"]] %||% "side_by_side"
+out_name <- comp[["output_name"]] %||% "comparison"
+dpi <- as.integer(comp[["dpi"]] %||% 300)
+label_size <- as.integer(comp[["label_font_size"]] %||% 28)
+fig_groups <- comp[["figure_groups"]] %||% "all"
+common_scale <- isTRUE(comp[["common_scale"]])
 source_data_name <- comp[["source_data_name"]] %||% NULL
 
 # ---------------------------------------------------------------------------
@@ -97,22 +105,22 @@ source_data_name <- comp[["source_data_name"]] %||% NULL
 #
 # Core comparison: side-by-side panels that directly answer the key question
 # "Does excluding Y6 in addition to Y1 materially change the results?"
-.TIER_CORE         <- c("primary", "mixed_models")
+.TIER_CORE <- c("condition_effects", "model_diagnostics")
 # Secondary comparison: side-by-side panels for secondary inferential checks
-.TIER_SECONDARY    <- c("secondary")
+.TIER_SECONDARY <- character(0)
 # Item-level and psychometric figures: all shown as full comparison panels.
 # These are DIRECTLY affected by which items are included in scoring.
-.TIER_ITEM         <- c("item_analysis", "psychometrics")
+.TIER_ITEM <- c("item_level", "psychometrics")
 # Exploratory and supplementary: compare but label clearly as non-primary
-.TIER_EXPLORATORY  <- c("exploratory")
-.TIER_SUPPLEMENTARY <- c("supplementary")
+.TIER_EXPLORATORY <- c("other")
+.TIER_SUPPLEMENTARY <- c("power_and_precision", "ceiling_and_floor", "timing", "study_design", "sample_characteristics")
 # Descriptive: mostly score-based so shown as comparison; a per-file list
 # (.STRUCTURAL_SINGLE_FILES) identifies the small subset that cannot change.
-.TIER_DESCRIPTIVE  <- c("descriptive")
+.TIER_DESCRIPTIVE <- c("score_distributions")
 # Suppressed from comparison: sequence-subgroup / between-group content.
 # period_effects figures (Fig 4, 15, 21) are sequence-group comparisons that
 # do not speak to the cross-exclusion-variant question at all.
-.TIER_SUPPRESSED   <- c("period_effects")
+.TIER_SUPPRESSED <- c("sequence_and_period")
 
 # Files that are structurally incapable of changing when scoring exclusions
 # change.  These are shown as single-output rather than comparison panels.
@@ -146,20 +154,35 @@ source_data_name <- comp[["source_data_name"]] %||% NULL
 )
 
 .classify_subfolder <- function(sf) {
-  if (sf %in% .TIER_SUPPRESSED)    return("Suppressed - sequence/period effects")
-  if (sf %in% .TIER_CORE)          return("Core comparison")
-  if (sf %in% .TIER_SECONDARY)     return("Secondary comparison")
-  if (sf %in% .TIER_ITEM)          return("Item/psychometric comparison")
-  if (sf %in% .TIER_EXPLORATORY)   return("Exploratory comparison")
-  if (sf %in% .TIER_SUPPLEMENTARY) return("Supplementary comparison")
-  if (sf %in% .TIER_DESCRIPTIVE)   return("Descriptive comparison")
-  "Core comparison"  # unknown subfolders: default to comparing
+  if (sf %in% .TIER_SUPPRESSED) {
+    return("Suppressed - sequence/period effects")
+  }
+  if (sf %in% .TIER_CORE) {
+    return("Core comparison")
+  }
+  if (sf %in% .TIER_SECONDARY) {
+    return("Secondary comparison")
+  }
+  if (sf %in% .TIER_ITEM) {
+    return("Item/psychometric comparison")
+  }
+  if (sf %in% .TIER_EXPLORATORY) {
+    return("Exploratory comparison")
+  }
+  if (sf %in% .TIER_SUPPLEMENTARY) {
+    return("Supplementary comparison")
+  }
+  if (sf %in% .TIER_DESCRIPTIVE) {
+    return("Descriptive comparison")
+  }
+  "Core comparison" # unknown subfolders: default to comparing
 }
 
 # Standard exclusion context note appended to all comparison outputs.
 .EXCL_NOTE <- paste0(
   "Y1 is excluded in both variants. ",
-  "Y6 is additionally excluded only in the second variant.")
+  "Y6 is additionally excluded only in the second variant."
+)
 
 # Normalize shorthand run labels (from YAML or auto-compare) to canonical form.
 .normalize_label <- function(lbl) {
@@ -198,11 +221,61 @@ if (length(runs) < 2) stop("Need at least 2 entries under comparison.runs.")
 
 outputs_dir <- file.path(proj_root, "outputs")
 
+# Current study-run layout: outputs/<run>/manuscript_selected + extra.
+# Comparison code reads only the non-selected analysis library under extra/.
+.run_root <- function(run_name) file.path(outputs_dir, run_name)
+.fig_root <- function(run_name, source = "figures") {
+  branch <- if (identical(source, "figures_comparison")) {
+    "comparison_figures"
+  } else {
+    "figures"
+  }
+  file.path(.run_root(run_name), "extra", branch)
+}
+.rds_file <- function(run_name, filename) {
+  file.path(.run_root(run_name), "extra", "analysis_objects", filename)
+}
+.find_table_file <- function(run_name, filename, required = FALSE) {
+  root <- file.path(.run_root(run_name), "extra", "tables")
+  if (!dir.exists(root)) {
+    if (required) stop("Table directory not found for run '", run_name, "': ", root)
+    return(file.path(root, filename))
+  }
+  hits <- list.files(root, recursive = TRUE, full.names = TRUE)
+  hits <- hits[basename(hits) == filename]
+  if (!length(hits)) {
+    if (required) stop("Table not found for run '", run_name, "': ", filename)
+    return(file.path(root, filename))
+  }
+  hits[[1L]]
+}
+
+# Accept historical comparison config group names, but translate them to the
+# semantic categories now used under extra/figures.
+if (!identical(fig_groups, "all") && is.character(fig_groups)) {
+  .group_map <- c(
+    primary = "condition_effects",
+    mixed_models = "model_diagnostics",
+    psychometrics = "psychometrics",
+    item_analysis = "item_level",
+    descriptive = "score_distributions",
+    period_effects = "sequence_and_period",
+    exploratory = "other",
+    supplementary = "power_and_precision"
+  )
+  fig_groups <- unique(vapply(fig_groups, function(g) {
+    if (g %in% names(.group_map)) unname(.group_map[[g]]) else g
+  }, character(1)))
+}
+
 for (r in runs) {
-  d <- file.path(outputs_dir, r[["name"]], "figures")
-  if (!dir.exists(d))
-    stop("Figures directory not found for run '", r[["name"]], "':\n  ", d,
-         "\n  Run the main pipeline for this config first.")
+  d <- .fig_root(r[["name"]], "figures")
+  if (!dir.exists(d)) {
+    stop(
+      "Figures directory not found for run '", r[["name"]], "':\n  ", d,
+      "\n  Run the main pipeline for this config first."
+    )
+  }
 }
 
 cat("Runs:\n")
@@ -210,8 +283,10 @@ for (r in runs) cat(sprintf("  %-30s -> label: %s\n", r[["name"]], r[["label"]])
 cat("Layout      :", layout, "\n")
 cat("Common scale:", common_scale, "\n")
 cat("Output      :", file.path(outputs_dir, out_name), "\n")
-cat("Figure groups:",
-    if (identical(fig_groups, "all")) "all" else paste(fig_groups, collapse = ", "), "\n\n")
+cat(
+  "Figure groups:",
+  if (identical(fig_groups, "all")) "all" else paste(fig_groups, collapse = ", "), "\n\n"
+)
 
 # ---------------------------------------------------------------------------
 # 2b. Cross-run exclusion context
@@ -224,8 +299,8 @@ cat("Figure groups:",
 # These sets are passed to 05_figures.R via HEATMAP_EXCL_ALWAYS_X / _Y env vars
 # during the context-aware re-render (section 3b below).
 .rds_excl <- lapply(runs, function(r) {
-  rds_p <- file.path(outputs_dir, r[["name"]], "rds", "raw_data.rds")
-  rd    <- tryCatch(readRDS(rds_p), error = function(e) NULL)
+  rds_p <- .rds_file(r[["name"]], "raw_data.rds")
+  rd <- tryCatch(readRDS(rds_p), error = function(e) NULL)
   list(
     x = if (!is.null(rd)) (rd[["x_excluded"]] %||% character(0)) else character(0),
     y = if (!is.null(rd)) (rd[["y_excluded"]] %||% character(0)) else character(0)
@@ -233,28 +308,36 @@ cat("Figure groups:",
 })
 names(.rds_excl) <- vapply(runs, `[[`, character(1), "name")
 
-.all_excl_x    <- unique(unlist(lapply(.rds_excl, `[[`, "x")))
-.all_excl_y    <- unique(unlist(lapply(.rds_excl, `[[`, "y")))
+.all_excl_x <- unique(unlist(lapply(.rds_excl, `[[`, "x")))
+.all_excl_y <- unique(unlist(lapply(.rds_excl, `[[`, "y")))
 .always_excl_x <- Reduce(intersect, lapply(.rds_excl, `[[`, "x"))
 .always_excl_y <- Reduce(intersect, lapply(.rds_excl, `[[`, "y"))
 .strict_excl_x <- setdiff(.all_excl_x, .always_excl_x)
 .strict_excl_y <- setdiff(.all_excl_y, .always_excl_y)
 
 cat("Cross-run exclusion context:\n")
-cat(sprintf("  X always excluded : %s\n",
-            if (length(.always_excl_x)) paste(.always_excl_x, collapse = ", ") else "(none)"))
-cat(sprintf("  X strict only     : %s\n",
-            if (length(.strict_excl_x)) paste(.strict_excl_x, collapse = ", ") else "(none)"))
-cat(sprintf("  Y always excluded : %s\n",
-            if (length(.always_excl_y)) paste(.always_excl_y, collapse = ", ") else "(none)"))
-cat(sprintf("  Y strict only     : %s\n",
-            if (length(.strict_excl_y)) paste(.strict_excl_y, collapse = ", ") else "(none)"))
+cat(sprintf(
+  "  X always excluded : %s\n",
+  if (length(.always_excl_x)) paste(.always_excl_x, collapse = ", ") else "(none)"
+))
+cat(sprintf(
+  "  X strict only     : %s\n",
+  if (length(.strict_excl_x)) paste(.strict_excl_x, collapse = ", ") else "(none)"
+))
+cat(sprintf(
+  "  Y always excluded : %s\n",
+  if (length(.always_excl_y)) paste(.always_excl_y, collapse = ", ") else "(none)"
+))
+cat(sprintf(
+  "  Y strict only     : %s\n",
+  if (length(.strict_excl_y)) paste(.strict_excl_y, collapse = ", ") else "(none)"
+))
 cat("\n")
 
 # Reference run for single descriptive figures: the run whose re-rendered
 # figures carry the most complete two-level exclusion context (most items
 # excluded, so Y1** AND Y6* markers both appear in heatmaps etc.).
-.ref_run_idx  <- which.max(vapply(runs, function(r) {
+.ref_run_idx <- which.max(vapply(runs, function(r) {
   length(.rds_excl[[r[["name"]]]][["x"]]) + length(.rds_excl[[r[["name"]]]][["y"]])
 }, numeric(1)))
 .ref_run_name <- runs[[.ref_run_idx]][["name"]]
@@ -262,7 +345,7 @@ cat("Reference run for single descriptive figures:", .ref_run_name, "\n\n")
 
 # Two-level markers are active when at least one form has items in both sets.
 .two_level_active <- (length(.always_excl_x) > 0 && length(.strict_excl_x) > 0) ||
-                     (length(.always_excl_y) > 0 && length(.strict_excl_y) > 0)
+  (length(.always_excl_y) > 0 && length(.strict_excl_y) > 0)
 
 # ---------------------------------------------------------------------------
 # 3. Re-render step
@@ -281,7 +364,7 @@ cat("Reference run for single descriptive figures:", .ref_run_name, "\n\n")
 # A re-render is required when common_scale=true (shared y-axis) OR when
 # two-level exclusion markers must be injected (HEATMAP_EXCL_ALWAYS_* env vars).
 .needs_rerender <- common_scale || .two_level_active ||
-                   length(.all_excl_x) > 0 || length(.all_excl_y) > 0
+  length(.all_excl_x) > 0 || length(.all_excl_y) > 0
 
 if (.needs_rerender) {
   # 3a. Compute global score_y_lo when common_scale is requested.
@@ -289,7 +372,7 @@ if (.needs_rerender) {
   if (common_scale) {
     all_score_vals <- c()
     for (r in runs) {
-      rds_p <- file.path(outputs_dir, r[["name"]], "rds", "analysis_data.rds")
+      rds_p <- .rds_file(r[["name"]], "analysis_data.rds")
       if (!file.exists(rds_p)) {
         warning("analysis_data.rds not found for '", r[["name"]], "' — skipping from global min")
         next
@@ -299,19 +382,24 @@ if (.needs_rerender) {
       sc <- grep("_score_(full|restricted)$", names(dat_r), value = TRUE)
       for (col in sc) all_score_vals <- c(all_score_vals, dat_r[[col]])
     }
-    if (length(all_score_vals) == 0)
+    if (length(all_score_vals) == 0) {
       stop("Could not read any analysis_data.rds — cannot compute common scale.")
+    }
     global_y_lo <- floor(min(all_score_vals, na.rm = TRUE))
-    cat(sprintf("Common y_lo : %d  (floor of global min %.3f)\n\n",
-                global_y_lo, min(all_score_vals, na.rm = TRUE)))
+    cat(sprintf(
+      "Common y_lo : %d  (floor of global min %.3f)\n\n",
+      global_y_lo, min(all_score_vals, na.rm = TRUE)
+    ))
   }
 
   # 3b. Re-render each run's figures into figures_comparison/ with:
   #     - SCORE_Y_LO_OVERRIDE (when common_scale=true)
   #     - HEATMAP_EXCL_ALWAYS_X / _Y (when exclusion context available)
   #     The original figures/ dirs are NOT touched.
-  rscript_bin    <- file.path(R.home("bin"),
-                               if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
+  rscript_bin <- file.path(
+    R.home("bin"),
+    if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript"
+  )
   run_all_script <- file.path(r_dir, "run_all.R")
 
   # Build HEATMAP_EXCL_ALWAYS env var values (comma-separated item names).
@@ -324,9 +412,11 @@ if (.needs_rerender) {
     # Fall back to the global study_config.yml when absent.
     if (is.null(cfg_rel)) {
       cfg_rel <- file.path("config", "study_config.yml")
-      message("No 'config:' entry for run '", r[["name"]], "' in comparison YAML.",
-              "\n  Falling back to: ", cfg_rel,
-              "\n  Item exclusions will be sourced from the run's raw_data.rds via ITEM_EXCLUSIONS.")
+      message(
+        "No 'config:' entry for run '", r[["name"]], "' in comparison YAML.",
+        "\n  Falling back to: ", cfg_rel,
+        "\n  Item exclusions will be sourced from the run's raw_data.rds via ITEM_EXCLUSIONS."
+      )
     }
     cfg_abs <- if (file.exists(cfg_rel)) cfg_rel else file.path(proj_root, cfg_rel)
     if (!file.exists(cfg_abs)) {
@@ -341,13 +431,17 @@ if (.needs_rerender) {
     .item_excl_val <- if (length(.run_excl_all) > 0) paste(.run_excl_all, collapse = ",") else "NONE"
 
     cat("Re-rendering :", r[["name"]],
-        "  (ITEM_EXCLUSIONS=", .item_excl_val, ")\n", sep = "")
+      "  (ITEM_EXCLUSIONS=", .item_excl_val, ")\n",
+      sep = ""
+    )
 
     # Save env vars we will temporarily override.
-    .env_keys  <- c("PIPELINE_CONFIG", "STUDY_NAME", "ANALYSIS_MODULES",
-                    "REUSE_DATA", "FIGURES_ROOT_SUFFIX", "SCORE_Y_LO_OVERRIDE",
-                    "HEATMAP_EXCL_ALWAYS_X", "HEATMAP_EXCL_ALWAYS_Y",
-                    "ITEM_EXCLUSIONS")
+    .env_keys <- c(
+      "PIPELINE_CONFIG", "STUDY_NAME", "ANALYSIS_MODULES",
+      "REUSE_DATA", "FIGURES_ROOT_SUFFIX", "SCORE_Y_LO_OVERRIDE",
+      "HEATMAP_EXCL_ALWAYS_X", "HEATMAP_EXCL_ALWAYS_Y",
+      "ITEM_EXCLUSIONS"
+    )
     .saved_env <- Sys.getenv(.env_keys, names = TRUE)
 
     .new_env <- list(
@@ -360,13 +454,16 @@ if (.needs_rerender) {
       HEATMAP_EXCL_ALWAYS_Y = .hmap_always_y_val,
       ITEM_EXCLUSIONS       = .item_excl_val
     )
-    if (!is.null(global_y_lo))
+    if (!is.null(global_y_lo)) {
       .new_env[["SCORE_Y_LO_OVERRIDE"]] <- as.character(global_y_lo)
+    }
 
     do.call(Sys.setenv, .new_env)
 
-    exit_code <- system2(rscript_bin, args = normalizePath(run_all_script, winslash = "/"),
-                         stdout = "", stderr = "")
+    exit_code <- system2(rscript_bin,
+      args = normalizePath(run_all_script, winslash = "/"),
+      stdout = "", stderr = ""
+    )
 
     # Restore env vars.
     for (k in names(.saved_env)) {
@@ -377,10 +474,11 @@ if (.needs_rerender) {
       }
     }
 
-    if (exit_code != 0)
+    if (exit_code != 0) {
       warning("Re-render failed for '", r[["name"]], "' (exit code ", exit_code, ")")
-    else
+    } else {
       cat("[OK]  Re-render complete:", r[["name"]], "\n")
+    }
   }
 
   .figs_src <- "figures_comparison"
@@ -399,39 +497,47 @@ if (.needs_rerender) {
 if (!is.null(source_data_name)) {
   .sdn_data_path <- file.path(proj_root, "study_data", source_data_name)
   if (!dir.exists(.sdn_data_path)) {
-    warning("source_data_name '", source_data_name, "' not found in study_data/ — ",
-            "single descriptive figures will fall back to reference comparison run.")
+    warning(
+      "source_data_name '", source_data_name, "' not found in study_data/ — ",
+      "single descriptive figures will fall back to reference comparison run."
+    )
   } else {
     cat("Base data render for single descriptive figures:", source_data_name, "\n")
-    .rscript_base  <- file.path(R.home("bin"),
-                                if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript")
-    .run_all_base  <- file.path(r_dir, "run_all.R")
-    .bexcl_all     <- c(.all_excl_x, .all_excl_y)
-    .bexcl_str     <- if (length(.bexcl_all) > 0) paste(.bexcl_all, collapse = ",") else "NONE"
+    .rscript_base <- file.path(
+      R.home("bin"),
+      if (.Platform$OS.type == "windows") "Rscript.exe" else "Rscript"
+    )
+    .run_all_base <- file.path(r_dir, "run_all.R")
+    .bexcl_all <- c(.all_excl_x, .all_excl_y)
+    .bexcl_str <- if (length(.bexcl_all) > 0) paste(.bexcl_all, collapse = ",") else "NONE"
 
-    .benv_keys  <- c("PIPELINE_CONFIG", "STUDY_NAME", "STUDY_DATA_PATH",
-                     "ANALYSIS_MODULES", "REUSE_DATA", "FIGURES_ROOT_SUFFIX",
-                     "HEATMAP_EXCL_ALWAYS_X", "HEATMAP_EXCL_ALWAYS_Y",
-                     "ITEM_EXCLUSIONS")
+    .benv_keys <- c(
+      "PIPELINE_CONFIG", "STUDY_NAME", "STUDY_DATA_PATH",
+      "ANALYSIS_MODULES", "REUSE_DATA", "FIGURES_ROOT_SUFFIX",
+      "HEATMAP_EXCL_ALWAYS_X", "HEATMAP_EXCL_ALWAYS_Y",
+      "ITEM_EXCLUSIONS"
+    )
     .benv_saved <- Sys.getenv(.benv_keys, names = TRUE)
 
     do.call(Sys.setenv, list(
-      PIPELINE_CONFIG       = normalizePath(
-                                file.path(proj_root, "config", "study_config.yml"),
-                                winslash = "/"),
-      STUDY_NAME            = source_data_name,
-      STUDY_DATA_PATH       = normalizePath(.sdn_data_path, winslash = "/"),
-      ANALYSIS_MODULES      = "psychometrics,analyses,figures",
-      REUSE_DATA            = "0",
-      FIGURES_ROOT_SUFFIX   = "figures_comparison",
+      PIPELINE_CONFIG = normalizePath(
+        file.path(proj_root, "config", "study_config.yml"),
+        winslash = "/"
+      ),
+      STUDY_NAME = source_data_name,
+      STUDY_DATA_PATH = normalizePath(.sdn_data_path, winslash = "/"),
+      ANALYSIS_MODULES = "psychometrics,analyses,figures",
+      REUSE_DATA = "0",
+      FIGURES_ROOT_SUFFIX = "figures_comparison",
       HEATMAP_EXCL_ALWAYS_X = paste(.always_excl_x, collapse = ","),
       HEATMAP_EXCL_ALWAYS_Y = paste(.always_excl_y, collapse = ","),
-      ITEM_EXCLUSIONS       = .bexcl_str
+      ITEM_EXCLUSIONS = .bexcl_str
     ))
 
     .base_exit <- system2(.rscript_base,
-                          args = normalizePath(.run_all_base, winslash = "/"),
-                          stdout = "", stderr = "")
+      args = normalizePath(.run_all_base, winslash = "/"),
+      stdout = "", stderr = ""
+    )
 
     for (k in names(.benv_saved)) {
       if (nzchar(.benv_saved[[k]])) {
@@ -441,9 +547,9 @@ if (!is.null(source_data_name)) {
       }
     }
 
-    if (.base_exit != 0)
+    if (.base_exit != 0) {
       warning("Base render failed for '", source_data_name, "' (exit ", .base_exit, ")")
-    else {
+    } else {
       .base_render_name <- source_data_name
       cat("[OK]  Base render complete:", source_data_name, "\n")
     }
@@ -453,26 +559,31 @@ if (!is.null(source_data_name)) {
 # ---------------------------------------------------------------------------
 # 4. Discover common figure subfolders / PNGs
 # ---------------------------------------------------------------------------
-first_fig_dir  <- file.path(outputs_dir, runs[[1]][["name"]], .figs_src)
+first_fig_dir <- .fig_root(runs[[1]][["name"]], .figs_src)
 all_subfolders <- sort(list.dirs(first_fig_dir, full.names = FALSE, recursive = FALSE))
 all_subfolders <- all_subfolders[nzchar(all_subfolders)]
 
-if (!identical(fig_groups, "all") && is.character(fig_groups) && length(fig_groups) > 0)
+if (!identical(fig_groups, "all") && is.character(fig_groups) && length(fig_groups) > 0) {
   all_subfolders <- intersect(all_subfolders, fig_groups)
+}
 
-if (length(all_subfolders) == 0)
+if (length(all_subfolders) == 0) {
   stop("No figure subfolders found under: ", first_fig_dir)
+}
 
 cat("Subfolders and comparison tiers:\n")
-for (.sf in all_subfolders)
+for (.sf in all_subfolders) {
   cat(sprintf("  %-24s -> %s\n", .sf, .classify_subfolder(.sf)))
+}
 cat("\n")
 
 # Pixel fingerprint helper: scale to 32x32 grey thumbnail, return mean pixel
 # value (0–255).  Used to detect effectively unchanged figures across runs.
 .img_fingerprint <- function(img) {
   thumb <- magick::image_convert(
-    magick::image_scale(img, "32x32!"), colorspace = "gray")
+    magick::image_scale(img, "32x32!"),
+    colorspace = "gray"
+  )
   mean(as.numeric(magick::image_data(thumb, channels = "gray")))
 }
 
@@ -490,7 +601,7 @@ cat("\n")
 # ---------------------------------------------------------------------------
 # 5. Create comparison output directory
 # ---------------------------------------------------------------------------
-out_root <- file.path(outputs_dir, out_name, "figures")
+out_root <- file.path(outputs_dir, out_name, "extra", "comparison_figures")
 dir.create(out_root, recursive = TRUE, showWarnings = FALSE)
 
 # Clean stale output directories for suppressed subfolders.
@@ -502,7 +613,9 @@ for (.sf_clean in all_subfolders) {
     .stale_sf_out <- file.path(out_root, .sf_clean)
     if (dir.exists(.stale_sf_out)) {
       cat("[CLEAN] Removing stale suppressed output subfolder: ",
-          .sf_clean, "\n", sep = "")
+        .sf_clean, "\n",
+        sep = ""
+      )
       unlink(.stale_sf_out, recursive = TRUE)
     }
   }
@@ -513,25 +626,26 @@ for (.sf_clean in all_subfolders) {
 # ---------------------------------------------------------------------------
 # Internal helper: build a labelled header block to prepend above an image.
 .make_header <- function(img, label_text, bg_color = "white") {
-  w         <- as.integer(magick::image_info(img)[["width"]])
+  w <- as.integer(magick::image_info(img)[["width"]])
   px_per_pt <- dpi / 72.0
-  h_hdr     <- max(200L, as.integer(label_size * px_per_pt * 2.5))
-  hdr       <- magick::image_blank(w, h_hdr, color = bg_color)
-  hdr       <- magick::image_annotate(hdr, text = label_text,
+  h_hdr <- max(200L, as.integer(label_size * px_per_pt * 2.5))
+  hdr <- magick::image_blank(w, h_hdr, color = bg_color)
+  hdr <- magick::image_annotate(hdr,
+    text = label_text,
     gravity = "Center", size = label_size,
-    weight  = 700L, color = "black", font = "sans")
-  sep       <- magick::image_blank(w, 2L, color = "grey80")
+    weight = 700L, color = "black", font = "sans"
+  )
+  sep <- magick::image_blank(w, 2L, color = "grey80")
   magick::image_append(c(hdr, sep), stack = TRUE)
 }
 
-n_created        <- 0L
-n_single         <- 0L
-n_descriptive    <- 0L
-n_skipped        <- 0L
-n_suppressed_sf  <- 0L
+n_created <- 0L
+n_single <- 0L
+n_descriptive <- 0L
+n_skipped <- 0L
+n_suppressed_sf <- 0L
 
 for (subfolder in all_subfolders) {
-
   .tier <- .classify_subfolder(subfolder)
 
   # Skip subfolders suppressed from comparison output.
@@ -539,24 +653,29 @@ for (subfolder in all_subfolders) {
   # do not speak to the cross-exclusion-variant comparison question.
   if (.tier == "Suppressed - sequence/period effects") {
     cat("[SUPPRESSED] ", subfolder,
-        " — sequence/between-group figures omitted from comparison package\n",
-        sep = "")
+      " — sequence/between-group figures omitted from comparison package\n",
+      sep = ""
+    )
     n_suppressed_sf <- n_suppressed_sf + 1L
     .comp_audit[[length(.comp_audit) + 1L]] <- list(
-      Subfolder      = subfolder,
-      File           = "(all)",
+      Subfolder = subfolder,
+      File = "(all)",
       Classification = "Suppressed - sequence/period effects",
-      Outcome        = "Entire subfolder suppressed",
-      Note           = paste0(
+      Outcome = "Entire subfolder suppressed",
+      Note = paste0(
         "Sequence-subgroup / between-group content suppressed from comparison package. ",
         "Exists in per-run outputs. The comparison question (does Y6 exclusion change ",
-        "within-subject conclusions?) is not answered by sequence-subgroup figures."))
+        "within-subject conclusions?) is not answered by sequence-subgroup figures."
+      )
+    )
     next
   }
 
   file_sets <- lapply(runs, function(r) {
-    d <- file.path(outputs_dir, r[["name"]], .figs_src, subfolder)
-    if (!dir.exists(d)) return(character(0))
+    d <- file.path(.fig_root(r[["name"]], .figs_src), subfolder)
+    if (!dir.exists(d)) {
+      return(character(0))
+    }
     basename(list.files(d, pattern = "\\.png$", full.names = FALSE))
   })
 
@@ -570,10 +689,9 @@ for (subfolder in all_subfolders) {
   dir.create(out_sub, recursive = TRUE, showWarnings = FALSE)
 
   for (fig_file in common_files) {
-
     # --- Read raw source images (no header yet) ---
     raw_imgs <- lapply(runs, function(r) {
-      path <- file.path(outputs_dir, r[["name"]], .figs_src, subfolder, fig_file)
+      path <- file.path(.fig_root(r[["name"]], .figs_src), subfolder, fig_file)
       tryCatch(magick::image_read(path), error = function(e) NULL)
     })
 
@@ -582,9 +700,10 @@ for (subfolder in all_subfolders) {
       cat("[SKIP] ", subfolder, "/", fig_file, " — all source files missing\n", sep = "")
       n_skipped <- n_skipped + 1L
       .comp_audit[[length(.comp_audit) + 1L]] <- list(
-        Subfolder      = subfolder, File = fig_file,
-        Classification = .tier,    Outcome = "Skipped",
-        Note = "Source files missing in all runs")
+        Subfolder = subfolder, File = fig_file,
+        Classification = .tier, Outcome = "Skipped",
+        Note = "Source files missing in all runs"
+      )
       next
     }
 
@@ -596,22 +715,28 @@ for (subfolder in all_subfolders) {
     #    of item scoring.  Examples: raw timing/completion figures.
     # --------------------------------------------------------------------- #
     if (fig_file %in% .STRUCTURAL_SINGLE_FILES) {
-      base_img   <- raw_imgs[[valid_idx[1]]]
-      .hdr_label <- paste0("Structural single-output\n",
-                           "(timing/completion data — unaffected by scoring exclusions)")
-      hdr      <- .make_header(base_img, .hdr_label)
+      base_img <- raw_imgs[[valid_idx[1]]]
+      .hdr_label <- paste0(
+        "Structural single-output\n",
+        "(timing/completion data — unaffected by scoring exclusions)"
+      )
+      hdr <- .make_header(base_img, .hdr_label)
       combined <- magick::image_append(c(hdr, base_img), stack = TRUE)
       magick::image_write(combined, path = out_path, density = dpi)
       cat("[SINGLE]    ", subfolder, "/", fig_file,
-          " — structural invariant (timing data)\n", sep = "")
+        " — structural invariant (timing data)\n",
+        sep = ""
+      )
       n_single <- n_single + 1L
       .comp_audit[[length(.comp_audit) + 1L]] <- list(
-        Subfolder      = subfolder, File = fig_file,
+        Subfolder = subfolder, File = fig_file,
         Classification = "Structural single-output",
-        Outcome        = "Single-output (structural invariant)",
-        Note           = paste0(
+        Outcome = "Single-output (structural invariant)",
+        Note = paste0(
           "Timing/completion data is collected independently of item scoring. ",
-          "Genuinely cannot change when scoring exclusions change."))
+          "Genuinely cannot change when scoring exclusions change."
+        )
+      )
       next
     }
 
@@ -629,14 +754,16 @@ for (subfolder in all_subfolders) {
       # comparison run so single descriptive figures reflect the actual study
       # data rather than an exclusion-run RDS built from a different source.
       .desc_src <- .base_render_name %||% .ref_run_name
-      ref_path  <- file.path(outputs_dir, .desc_src, .figs_src, subfolder, fig_file)
-      if (!file.exists(ref_path))
-        ref_path <- file.path(outputs_dir, .desc_src, "figures", subfolder, fig_file)
+      ref_path <- file.path(.fig_root(.desc_src, .figs_src), subfolder, fig_file)
+      if (!file.exists(ref_path)) {
+        ref_path <- file.path(.fig_root(.desc_src, "figures"), subfolder, fig_file)
+      }
       # If base render didn't produce this file, fall back to reference comparison run.
       if (!file.exists(ref_path) && !is.null(.base_render_name)) {
-        ref_path <- file.path(outputs_dir, .ref_run_name, .figs_src, subfolder, fig_file)
-        if (!file.exists(ref_path))
-          ref_path <- file.path(outputs_dir, .ref_run_name, "figures", subfolder, fig_file)
+        ref_path <- file.path(.fig_root(.ref_run_name, .figs_src), subfolder, fig_file)
+        if (!file.exists(ref_path)) {
+          ref_path <- file.path(.fig_root(.ref_run_name, "figures"), subfolder, fig_file)
+        }
       }
 
       if (file.exists(ref_path)) {
@@ -644,22 +771,28 @@ for (subfolder in all_subfolders) {
         if (!is.null(ref_img)) {
           magick::image_write(ref_img, path = out_path, density = dpi)
           cat("[DESCRIPTIVE] ", subfolder, "/", fig_file,
-              " — single descriptive (raw item data)\n", sep = "")
+            " — single descriptive (raw item data)\n",
+            sep = ""
+          )
           n_descriptive <- n_descriptive + 1L
           .comp_audit[[length(.comp_audit) + 1L]] <- list(
-            Subfolder      = subfolder, File = fig_file,
+            Subfolder = subfolder, File = fig_file,
             Classification = "Single descriptive",
-            Outcome        = "Single descriptive figure (canonical source data)",
-            Note           = paste0(
+            Outcome = "Single descriptive figure (canonical source data)",
+            Note = paste0(
               "Raw item-level data unchanged by scoring exclusion choice. ",
               "Source: ", .desc_src, ". ",
-              "Two-level exclusion markers (** / *) embedded in figure."))
+              "Two-level exclusion markers (** / *) embedded in figure."
+            )
+          )
           next
         }
       }
       # Reference file not found — fall through to comparison panel.
       cat("[WARN] Descriptive reference missing for ", fig_file,
-          " in run '", .desc_src, "' — falling back to comparison panel\n", sep = "")
+        " in run '", .desc_src, "' — falling back to comparison panel\n",
+        sep = ""
+      )
     }
 
     # --------------------------------------------------------------------- #
@@ -672,34 +805,42 @@ for (subfolder in all_subfolders) {
     # --------------------------------------------------------------------- #
     panel_imgs <- lapply(seq_along(runs), function(i) {
       img <- raw_imgs[[i]]
-      if (is.null(img)) return(NULL)
+      if (is.null(img)) {
+        return(NULL)
+      }
       hdr <- .make_header(img, runs[[i]][["label"]])
       magick::image_append(c(hdr, img), stack = TRUE)
     })
     panel_imgs <- Filter(Negate(is.null), panel_imgs)
-    if (length(panel_imgs) == 0) { n_skipped <- n_skipped + 1L; next }
+    if (length(panel_imgs) == 0) {
+      n_skipped <- n_skipped + 1L
+      next
+    }
 
     infos <- lapply(panel_imgs, magick::image_info)
 
     if (layout == "side_by_side") {
-      min_h      <- min(vapply(infos, function(i) as.integer(i[["height"]]), integer(1)))
-      panel_imgs <- lapply(panel_imgs, function(img)
-        magick::image_scale(img, paste0("x", min_h)))
-      combined   <- magick::image_append(do.call(c, panel_imgs), stack = FALSE)
+      min_h <- min(vapply(infos, function(i) as.integer(i[["height"]]), integer(1)))
+      panel_imgs <- lapply(panel_imgs, function(img) {
+        magick::image_scale(img, paste0("x", min_h))
+      })
+      combined <- magick::image_append(do.call(c, panel_imgs), stack = FALSE)
     } else {
-      min_w      <- min(vapply(infos, function(i) as.integer(i[["width"]]),  integer(1)))
-      panel_imgs <- lapply(panel_imgs, function(img)
-        magick::image_scale(img, paste0(min_w, "x")))
-      combined   <- magick::image_append(do.call(c, panel_imgs), stack = TRUE)
+      min_w <- min(vapply(infos, function(i) as.integer(i[["width"]]), integer(1)))
+      panel_imgs <- lapply(panel_imgs, function(img) {
+        magick::image_scale(img, paste0(min_w, "x"))
+      })
+      combined <- magick::image_append(do.call(c, panel_imgs), stack = TRUE)
     }
 
     magick::image_write(combined, path = out_path, density = dpi)
     cat("[OK]        ", subfolder, "/", fig_file, "\n", sep = "")
     n_created <- n_created + 1L
     .comp_audit[[length(.comp_audit) + 1L]] <- list(
-      Subfolder      = subfolder, File = fig_file,
+      Subfolder = subfolder, File = fig_file,
       Classification = .tier, Outcome = "Comparison panel produced",
-      Note           = .EXCL_NOTE)
+      Note = .EXCL_NOTE
+    )
   }
 }
 
@@ -709,15 +850,19 @@ for (subfolder in all_subfolders) {
 cat("\n", strrep("=", 72), "\n", sep = "")
 cat(sprintf(
   "  Figure output:\n    %d comparison panels\n    %d single descriptive figures\n    %d single-output (structural invariant)\n    %d suppressed subfolders (sequence/between-group)\n    %d skipped\n  Output: %s\n",
-  n_created, n_descriptive, n_single, n_suppressed_sf, n_skipped, out_root))
-if (!is.null(global_y_lo))
+  n_created, n_descriptive, n_single, n_suppressed_sf, n_skipped, out_root
+))
+if (!is.null(global_y_lo)) {
   cat(sprintf("  Common y-axis lower bound: %d\n", global_y_lo))
+}
 cat(strrep("=", 72), "\n")
 
 if (length(.comp_audit) > 0) {
-  .audit_df  <- do.call(rbind, lapply(.comp_audit, as.data.frame,
-                                      stringsAsFactors = FALSE))
-  .audit_csv <- file.path(outputs_dir, out_name, "FIGURE_CLASSIFICATION.csv")
+  .audit_df <- do.call(rbind, lapply(.comp_audit, as.data.frame,
+    stringsAsFactors = FALSE
+  ))
+  .audit_csv <- file.path(outputs_dir, out_name, "extra", "comparison_metadata", "FIGURE_CLASSIFICATION.csv")
+  dir.create(dirname(.audit_csv), recursive = TRUE, showWarnings = FALSE)
   write.csv(.audit_df, .audit_csv, row.names = FALSE, quote = TRUE)
   cat("\nFigure classification audit: ", .audit_csv, "\n", sep = "")
 }
@@ -726,37 +871,41 @@ if (length(.comp_audit) > 0) {
 # 8. Comparison tables — CSV + PNG
 # ---------------------------------------------------------------------------
 # Local helper: write one comparison table as CSV and (optionally) PNG.
-# Writes to outputs/<out_name>/tables/<name>.csv
-#             outputs/<out_name>/tables_png/<name>.png
-.comp_tbl_dir     <- file.path(outputs_dir, out_name, "tables")
-.comp_tbl_png_dir <- file.path(outputs_dir, out_name, "tables_png")
-dir.create(.comp_tbl_dir,     recursive = TRUE, showWarnings = FALSE)
+# Writes to outputs/<out_name>/extra/tables/<semantic-category>/<name>.csv
+#             outputs/<out_name>/extra/tables/<name>.png
+.comp_tbl_dir <- file.path(outputs_dir, out_name, "extra", "tables")
+.comp_tbl_png_dir <- .comp_tbl_dir
+dir.create(.comp_tbl_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(.comp_tbl_png_dir, recursive = TRUE, showWarnings = FALSE)
 
 # Clean stale table files from previous runs before writing new ones.
 # This prevents old outputs (from superseded code paths) from persisting
 # alongside current outputs and causing confusion.
-.stale_csv <- list.files(.comp_tbl_dir,     pattern = "\\.csv$", full.names = TRUE)
+.stale_csv <- list.files(.comp_tbl_dir, pattern = "\\.csv$", full.names = TRUE)
 .stale_png <- list.files(.comp_tbl_png_dir, pattern = "\\.png$", full.names = TRUE)
 if (length(.stale_csv) > 0 || length(.stale_png) > 0) {
-  cat(sprintf("Cleaning %d stale table file(s) from previous run...\n",
-              length(.stale_csv) + length(.stale_png)))
+  cat(sprintf(
+    "Cleaning %d stale table file(s) from previous run...\n",
+    length(.stale_csv) + length(.stale_png)
+  ))
   file.remove(c(.stale_csv, .stale_png))
 }
 
 save_comp_table <- function(df, name, notes = NULL, png_note = NULL, sidecar = NULL) {
   csv_path <- file.path(.comp_tbl_dir, paste0(name, ".csv"))
   write.csv(df, csv_path, row.names = FALSE, quote = TRUE)
-  if (!is.null(notes))
+  if (!is.null(notes)) {
     cat(c("", "# --- Notes ---", paste0("# ", notes)),
-        file = csv_path, sep = "\n", append = TRUE)
+      file = csv_path, sep = "\n", append = TRUE
+    )
+  }
   cat("[CSV] ", basename(csv_path), "\n", sep = "")
 
   if (requireNamespace("gt", quietly = TRUE)) {
     png_path <- file.path(.comp_tbl_png_dir, paste0(name, ".png"))
     gt_tbl <- gt::gt(df) |>
       gt::tab_options(
-        table.font.size                   = 11,
+        table.font.size                   = 14,
         column_labels.font.weight         = "bold",
         table.border.top.color            = "grey30",
         table.border.bottom.color         = "grey30",
@@ -765,13 +914,18 @@ save_comp_table <- function(df, name, notes = NULL, png_note = NULL, sidecar = N
       ) |>
       gt::opt_table_lines("none") |>
       gt::opt_row_striping()
-    if (!is.null(png_note))
+    if (!is.null(png_note)) {
       gt_tbl <- gt_tbl |> gt::tab_source_note(gt::md(png_note))
-    tryCatch({
-      gt::gtsave(gt_tbl, png_path)
-      cat("[PNG] ", basename(png_path), "\n", sep = "")
-    }, error = function(e)
-      message("[WARN] gt PNG failed for '", name, "': ", conditionMessage(e)))
+    }
+    tryCatch(
+      {
+        gt::gtsave(gt_tbl, png_path)
+        cat("[PNG] ", basename(png_path), "\n", sep = "")
+      },
+      error = function(e) {
+        message("[WARN] gt PNG failed for '", name, "': ", conditionMessage(e))
+      }
+    )
   }
   if (!is.null(sidecar)) {
     sidecar_path <- file.path(.comp_tbl_png_dir, paste0(name, ".notes.md"))
@@ -784,22 +938,33 @@ save_comp_table <- function(df, name, notes = NULL, png_note = NULL, sidecar = N
 # Helper: if all comparison rows are identical at displayed precision across
 # exclusion variants, returns a note string; otherwise returns NULL.
 .identical_at_precision_note <- function(df, variant_col = "Exclusion Variant") {
-  if (!variant_col %in% names(df)) return(NULL)
+  if (!variant_col %in% names(df)) {
+    return(NULL)
+  }
   variants <- unique(df[[variant_col]])
-  if (length(variants) < 2L) return(NULL)
+  if (length(variants) < 2L) {
+    return(NULL)
+  }
   value_cols <- setdiff(names(df), variant_col)
-  rows_by_v  <- lapply(variants, function(v)
-    df[df[[variant_col]] == v, value_cols, drop = FALSE])
+  rows_by_v <- lapply(variants, function(v) {
+    df[df[[variant_col]] == v, value_cols, drop = FALSE]
+  })
   n_rows <- vapply(rows_by_v, nrow, integer(1L))
-  if (length(unique(n_rows)) > 1L) return(NULL)
-  ref      <- rows_by_v[[1L]]
+  if (length(unique(n_rows)) > 1L) {
+    return(NULL)
+  }
+  ref <- rows_by_v[[1L]]
   all_same <- all(vapply(rows_by_v[-1L], function(other) {
     all(mapply(function(a, b) identical(as.character(a), as.character(b)), ref, other))
   }, logical(1L)))
-  if (all_same)
-    paste0("NOTE: Values are identical at displayed precision across all exclusion variants. ",
-           "Differences may exist at finer precision but are smaller than the rounding shown.")
-  else NULL
+  if (all_same) {
+    paste0(
+      "NOTE: Values are identical at displayed precision across all exclusion variants. ",
+      "Differences may exist at finer precision but are smaller than the rounding shown."
+    )
+  } else {
+    NULL
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -813,20 +978,23 @@ save_comp_table <- function(df, name, notes = NULL, png_note = NULL, sidecar = N
 {
   .stale_runs <- character(0)
   for (.sr in runs) {
-    .rds_p <- file.path(outputs_dir, .sr[["name"]], "rds", "analysis_data.rds")
-    .csv_p <- file.path(outputs_dir, .sr[["name"]], "tables", "descriptive",
-                        "09_period_condition_cell_means.csv")
+    .rds_p <- .rds_file(.sr[["name"]], "analysis_data.rds")
+    .csv_p <- .find_table_file(.sr[["name"]], "09_period_condition_cell_means.csv")
     if (!file.exists(.csv_p)) {
       .stale_runs <- c(.stale_runs, .sr[["name"]])
-      cat(sprintf("[STALE] %s: 09_period_condition_cell_means.csv is missing\n",
-                  .sr[["name"]]))
+      cat(sprintf(
+        "[STALE] %s: 09_period_condition_cell_means.csv is missing\n",
+        .sr[["name"]]
+      ))
     } else if (file.exists(.rds_p)) {
       .rds_mtime <- file.info(.rds_p)$mtime
       .csv_mtime <- file.info(.csv_p)$mtime
       if (.csv_mtime < .rds_mtime) {
         .stale_runs <- c(.stale_runs, .sr[["name"]])
-        cat(sprintf("[STALE] %s: CSV (%s) older than analysis_data.rds (%s)\n",
-                    .sr[["name"]], format(.csv_mtime), format(.rds_mtime)))
+        cat(sprintf(
+          "[STALE] %s: CSV (%s) older than analysis_data.rds (%s)\n",
+          .sr[["name"]], format(.csv_mtime), format(.rds_mtime)
+        ))
       }
     }
   }
@@ -835,9 +1003,12 @@ save_comp_table <- function(df, name, notes = NULL, png_note = NULL, sidecar = N
       "Per-run source table(s) are stale or missing for: ",
       paste(.stale_runs, collapse = ", "), "\n",
       "Regenerate with (PowerShell):\n",
-      paste(vapply(.stale_runs, function(rn)
-        sprintf("  $env:STUDY_NAME='%s'; $env:REUSE_DATA='1'; $env:ANALYSIS_MODULES='tables'; Rscript --vanilla R/run_all.R", rn),
-        character(1)), collapse = "\n"),
+      paste(vapply(
+        .stale_runs, function(rn) {
+          sprintf("  $env:STUDY_NAME='%s'; $env:REUSE_DATA='1'; $env:ANALYSIS_MODULES='tables'; Rscript --vanilla R/run_all.R", rn)
+        },
+        character(1)
+      ), collapse = "\n"),
       "\nThen re-run the comparison pipeline."
     )
   }
@@ -851,9 +1022,13 @@ cat("\nBuilding comparison tables...\n")
 # ---------------------------------------------------------------------------
 .fmt_ms_sub <- function(m, s) sprintf("%.2f (%.2f)", m, s)
 .fmt_ci_sub <- function(lo, hi) sprintf("[%.2f, %.2f]", lo, hi)
-.fmt_p_sub  <- function(p) {
-  if (is.na(p)) return("NA")
-  if (p < 0.001) return("< 0.001")
+.fmt_p_sub <- function(p) {
+  if (is.na(p)) {
+    return("NA")
+  }
+  if (p < 0.001) {
+    return("< 0.001")
+  }
   sprintf("%.3f", p)
 }
 # Normalise bare decimals that lack a leading zero: ".266" -> "0.266",
@@ -865,12 +1040,16 @@ cat("\nBuilding comparison tables...\n")
 # Returns list(n, m_a, sd_a, m_b, sd_b, m_diff, dz, ci_lo, ci_hi, p).
 .paired_contrast <- function(a, b, ci_level = 0.95) {
   valid <- !is.na(a) & !is.na(b)
-  a <- a[valid]; b <- b[valid]
+  a <- a[valid]
+  b <- b[valid]
   n <- length(a)
-  if (n < 2L) return(NULL)
+  if (n < 2L) {
+    return(NULL)
+  }
   diffs <- a - b
-  tt    <- tryCatch(t.test(a, b, paired = TRUE, conf.level = ci_level),
-                    error = function(e) NULL)
+  tt <- tryCatch(t.test(a, b, paired = TRUE, conf.level = ci_level),
+    error = function(e) NULL
+  )
   list(
     n      = n,
     m_a    = mean(a),  sd_a = sd(a),
@@ -892,53 +1071,61 @@ cat("\nBuilding comparison tables...\n")
 # ---------------------------------------------------------------------------
 # Load study config for group label names (int_label / ctl_label).
 .study_cfg_8a_path <- file.path(proj_root, "config", "study_config.yml")
-.study_yml_8a      <- if (file.exists(.study_cfg_8a_path))
-  tryCatch(yaml::read_yaml(.study_cfg_8a_path), error = function(e) list()) else list()
+.study_yml_8a <- if (file.exists(.study_cfg_8a_path)) {
+  tryCatch(yaml::read_yaml(.study_cfg_8a_path), error = function(e) list())
+} else {
+  list()
+}
 .int_label_8a <- (.study_yml_8a[["study"]][["intervention_label"]]) %||% "Intervention"
-.ctl_label_8a <- (.study_yml_8a[["study"]][["control_label"]])       %||% "Control"
+.ctl_label_8a <- (.study_yml_8a[["study"]][["control_label"]]) %||% "Control"
 
 .rows_8a <- lapply(runs, function(r) {
-  run_name  <- r[["name"]]
+  run_name <- r[["name"]]
   run_label <- r[["label"]] %||% run_name
 
-  contrasts_f <- file.path(outputs_dir, run_name,
-                            "tables", "primary", "03_primary_contrasts.csv")
+  contrasts_f <- .find_table_file(run_name, "03_primary_contrasts.csv")
   if (!file.exists(contrasts_f)) {
-    message("[WARN] Primary contrasts table not found for '", run_name, "'"); return(NULL)
+    message("[WARN] Primary contrasts table not found for '", run_name, "'")
+    return(NULL)
   }
   contrasts <- tryCatch(
     read.csv(contrasts_f, stringsAsFactors = FALSE, check.names = FALSE),
-    error = function(e) { message("[WARN] ", e$message); NULL }
+    error = function(e) {
+      message("[WARN] ", e$message)
+      NULL
+    }
   )
-  if (is.null(contrasts)) return(NULL)
+  if (is.null(contrasts)) {
+    return(NULL)
+  }
 
   int_row <- contrasts[grepl("Intervention vs Control", contrasts$Contrast, fixed = TRUE) &
-                         grepl("restricted", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
-  per_row <- contrasts[grepl("Period 2 vs Period 1",    contrasts$Contrast, fixed = TRUE) &
-                         grepl("restricted", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
+    grepl("restricted", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
+  per_row <- contrasts[grepl("Period 2 vs Period 1", contrasts$Contrast, fixed = TRUE) &
+    grepl("restricted", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
 
-  mm_f <- file.path(outputs_dir, run_name,
-                    "tables", "mixed_models", "07_mixed_model_results.csv")
+  mm_f <- .find_table_file(run_name, "07_mixed_model_results.csv")
   cond_est <- cond_p <- per_est <- per_p <- NA_character_
   if (file.exists(mm_f)) {
     mm <- tryCatch(read.csv(mm_f, stringsAsFactors = FALSE, check.names = FALSE),
-                   error = function(e) NULL)
+      error = function(e) NULL
+    )
     if (!is.null(mm)) {
       mm_c <- mm[tolower(mm[["Scoring"]]) == "restricted" &
-                   grepl("condition_fac", mm[["Term"]], fixed = TRUE), , drop = FALSE]
+        grepl("condition_fac", mm[["Term"]], fixed = TRUE), , drop = FALSE]
       if (nrow(mm_c) > 0) {
         cond_est <- .add_leading_zero(paste0(
           sub("^=\\s*", "", as.character(round(as.numeric(mm_c[["Estimate"]][1]), 3))),
-          " (", sub("^=\\s*", "", as.character(round(as.numeric(mm_c[["SE"]][1]),       3))), ")"
+          " (", sub("^=\\s*", "", as.character(round(as.numeric(mm_c[["SE"]][1]), 3))), ")"
         ))
         cond_p <- .add_leading_zero(sub("^=\\s*", "", as.character(mm_c[["p"]][1])))
       }
       mm_p <- mm[tolower(mm[["Scoring"]]) == "restricted" &
-                   grepl("period_fac", mm[["Term"]], fixed = TRUE), , drop = FALSE]
+        grepl("period_fac", mm[["Term"]], fixed = TRUE), , drop = FALSE]
       if (nrow(mm_p) > 0) {
         per_est <- .add_leading_zero(paste0(
           sub("^=\\s*", "", as.character(round(as.numeric(mm_p[["Estimate"]][1]), 3))),
-          " (", sub("^=\\s*", "", as.character(round(as.numeric(mm_p[["SE"]][1]),      3))), ")"
+          " (", sub("^=\\s*", "", as.character(round(as.numeric(mm_p[["SE"]][1]), 3))), ")"
         ))
         per_p <- .add_leading_zero(sub("^=\\s*", "", as.character(mm_p[["p"]][1])))
       }
@@ -949,40 +1136,42 @@ cat("\nBuilding comparison tables...\n")
   if (nrow(int_row) > 0) {
     pr <- int_row[1L, ]
     rows[[1L]] <- data.frame(
-      "Contrast"               = paste0(.int_label_8a, " vs. ", .ctl_label_8a),
-      "Exclusion Variant"      = run_label,
-      "Group A"                = .int_label_8a,
-      "Mean A (SD)"            = pr[["Mean A (SD)"]],
-      "Group B"                = .ctl_label_8a,
-      "Mean B (SD)"            = pr[["Mean B (SD)"]],
+      "Contrast" = paste0(.int_label_8a, " vs. ", .ctl_label_8a),
+      "Exclusion Variant" = run_label,
+      "Group A" = .int_label_8a,
+      "Mean A (SD)" = pr[["Mean A (SD)"]],
+      "Group B" = .ctl_label_8a,
+      "Mean B (SD)" = pr[["Mean B (SD)"]],
       "Mean Diff (A \u2212 B)" = pr[["Mean Diff"]],
-      "95% CI"                 = pr[["95% CI"]],
-      "Cohen dz"               = pr[["Cohen dz"]],
-      "paired p"               = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
-      "MM Est (SE)"            = cond_est,
-      "MM p"                   = cond_p,
+      "95% CI" = pr[["95% CI"]],
+      "Cohen dz" = pr[["Cohen dz"]],
+      "paired p" = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
+      "MM Est (SE)" = cond_est,
+      "MM p" = cond_p,
       stringsAsFactors = FALSE, check.names = FALSE
     )
   }
   if (nrow(per_row) > 0) {
     pr <- per_row[1L, ]
     rows[[2L]] <- data.frame(
-      "Contrast"               = "Period 2 vs. Period 1",
-      "Exclusion Variant"      = run_label,
-      "Group A"                = "Period 2",
-      "Mean A (SD)"            = pr[["Mean A (SD)"]],
-      "Group B"                = "Period 1",
-      "Mean B (SD)"            = pr[["Mean B (SD)"]],
+      "Contrast" = "Period 2 vs. Period 1",
+      "Exclusion Variant" = run_label,
+      "Group A" = "Period 2",
+      "Mean A (SD)" = pr[["Mean A (SD)"]],
+      "Group B" = "Period 1",
+      "Mean B (SD)" = pr[["Mean B (SD)"]],
       "Mean Diff (A \u2212 B)" = pr[["Mean Diff"]],
-      "95% CI"                 = pr[["95% CI"]],
-      "Cohen dz"               = pr[["Cohen dz"]],
-      "paired p"               = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
-      "MM Est (SE)"            = per_est,
-      "MM p"                   = per_p,
+      "95% CI" = pr[["95% CI"]],
+      "Cohen dz" = pr[["Cohen dz"]],
+      "paired p" = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
+      "MM Est (SE)" = per_est,
+      "MM p" = per_p,
       stringsAsFactors = FALSE, check.names = FALSE
     )
   }
-  if (length(rows) == 0) return(NULL)
+  if (length(rows) == 0) {
+    return(NULL)
+  }
   do.call(rbind, rows)
 })
 .rows_8a <- Filter(Negate(is.null), .rows_8a)
@@ -992,9 +1181,11 @@ if (length(.rows_8a) > 0) {
   .df_8a <- .df_8a[order(.df_8a[["Contrast"]], .df_8a[["Exclusion Variant"]]), ]
   .notes_8a <- Filter(Negate(is.null), c(
     "Sensitivity check: both primary contrasts under restricted scoring, compared across exclusion variants.",
-    paste0("Group A = first-named group in Contrast (", .int_label_8a, "; Period 2). ",
-           "Group B = second-named group (", .ctl_label_8a, "; Period 1). ",
-           "Mean Diff (A \u2212 B) = A minus B (paired)."),
+    paste0(
+      "Group A = first-named group in Contrast (", .int_label_8a, "; Period 2). ",
+      "Group B = second-named group (", .ctl_label_8a, "; Period 1). ",
+      "Mean Diff (A \u2212 B) = A minus B (paired)."
+    ),
     "MM Est (SE) = linear mixed-model fixed-effect estimate (SE) for each contrast.",
     "Table structure mirrors 00_overall_results.csv in each run's primary/ folder.",
     .EXCL_NOTE,
@@ -1007,17 +1198,23 @@ if (length(.rows_8a) > 0) {
     "",
     "**Suggested manuscript title:** Primary and Period Effects by Exclusion Variant: Sensitivity Analysis (Restricted Scoring)",
     "",
-    paste0("**Suggested caption:** Sensitivity analysis: ", .int_label_8a, " vs.\u00a0", .ctl_label_8a,
-           " and Period\u00a02 vs.\u00a0Period\u00a01 contrasts"),
+    paste0(
+      "**Suggested caption:** Sensitivity analysis: ", .int_label_8a, " vs.\u00a0", .ctl_label_8a,
+      " and Period\u00a02 vs.\u00a0Period\u00a01 contrasts"
+    ),
     "across two item-exclusion variants (restricted scoring).",
-    paste0("Group A = first-named group in Contrast (", .int_label_8a, "; Period\u00a02). ",
-           "Group B = second-named group (", .ctl_label_8a, "; Period\u00a01)."),
+    paste0(
+      "Group A = first-named group in Contrast (", .int_label_8a, "; Period\u00a02). ",
+      "Group B = second-named group (", .ctl_label_8a, "; Period\u00a01)."
+    ),
     "Mean Diff (A \u2212 B) = A minus B (paired). MM\u00a0Est (SE) = linear mixed-model fixed-effect estimate (SE).",
     "",
     "## What it shows",
     "",
-    paste0("Both primary contrasts (", .int_label_8a, " vs.\u00a0", .ctl_label_8a,
-           " and Period\u00a02 vs.\u00a0Period\u00a01) under restricted"),
+    paste0(
+      "Both primary contrasts (", .int_label_8a, " vs.\u00a0", .ctl_label_8a,
+      " and Period\u00a02 vs.\u00a0Period\u00a01) under restricted"
+    ),
     "scoring, side by side for each exclusion variant. Allows a direct sensitivity check:",
     "do the overall results change when Y6 is additionally excluded?",
     "",
@@ -1042,11 +1239,12 @@ if (length(.rows_8a) > 0) {
     "## Classification",
     "",
     "- **Type:** Sensitivity",
-    "- **Source file(s):** tables/primary/03_primary_contrasts.csv,",
-    "  tables/mixed_models/07_mixed_model_results.csv (per run)"
+    "- **Source file(s):** extra/tables/condition_effects/03_primary_contrasts.csv,",
+    "  extra/tables/models/07_mixed_model_results.csv (per run)"
   )
   save_comp_table(.df_8a, "variant_comparison_overall_results",
-                  notes = .notes_8a, sidecar = .sidecar_8a)
+    notes = .notes_8a, sidecar = .sidecar_8a
+  )
 } else {
   message("[WARN] variant_comparison_overall_results: no rows — table not written.")
 }
@@ -1058,42 +1256,52 @@ if (length(.rows_8a) > 0) {
 # 03_primary_contrasts.csv (same source as 8a).  Replaces the earlier lookup
 # of 13b_full_vs_restricted_effect_sizes.csv which was in the wrong subfolder.
 .rows_8b <- lapply(runs, function(r) {
-  run_name  <- r[["name"]]
+  run_name <- r[["name"]]
   run_label <- r[["label"]] %||% run_name
 
-  f <- file.path(outputs_dir, run_name, "tables", "primary", "03_primary_contrasts.csv")
+  f <- .find_table_file(run_name, "03_primary_contrasts.csv")
   if (!file.exists(f)) {
     message("[WARN] 03_primary_contrasts.csv not found (8b) for '", run_name, "'")
     return(NULL)
   }
   contrasts <- tryCatch(read.csv(f, stringsAsFactors = FALSE, check.names = FALSE),
-                        error = function(e) { message("[WARN] ", e$message); NULL })
-  if (is.null(contrasts)) return(NULL)
+    error = function(e) {
+      message("[WARN] ", e$message)
+      NULL
+    }
+  )
+  if (is.null(contrasts)) {
+    return(NULL)
+  }
 
   full_row <- contrasts[grepl("Intervention vs Control", contrasts$Contrast, fixed = TRUE) &
-                          grepl("full", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
+    grepl("full", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
   rest_row <- contrasts[grepl("Intervention vs Control", contrasts$Contrast, fixed = TRUE) &
-                          grepl("restricted", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
+    grepl("restricted", contrasts$Contrast, fixed = TRUE), , drop = FALSE]
 
   rows <- list()
-  for (.info in list(list(row = full_row, lbl = "Full"),
-                     list(row = rest_row, lbl = "Restricted"))) {
+  for (.info in list(
+    list(row = full_row, lbl = "Full"),
+    list(row = rest_row, lbl = "Restricted")
+  )) {
     if (nrow(.info$row) == 0) next
     pr <- .info$row[1, ]
     rows[[length(rows) + 1L]] <- data.frame(
       "Exclusion Variant" = run_label,
-      "Scoring"           = .info$lbl,
-      "N"                 = pr[["N"]],
-      "AI Mean (SD)"      = pr[["Mean A (SD)"]],
+      "Scoring" = .info$lbl,
+      "N" = pr[["N"]],
+      "AI Mean (SD)" = pr[["Mean A (SD)"]],
       "Control Mean (SD)" = pr[["Mean B (SD)"]],
-      "Mean Diff"         = pr[["Mean Diff"]],
-      "95% CI"            = pr[["95% CI"]],
-      "Cohen dz"          = pr[["Cohen dz"]],
-      "p"                 = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
+      "Mean Diff" = pr[["Mean Diff"]],
+      "95% CI" = pr[["95% CI"]],
+      "Cohen dz" = pr[["Cohen dz"]],
+      "p" = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
       stringsAsFactors = FALSE, check.names = FALSE
     )
   }
-  if (length(rows) == 0) return(NULL)
+  if (length(rows) == 0) {
+    return(NULL)
+  }
   do.call(rbind, rows)
 })
 .rows_8b <- Filter(Negate(is.null), .rows_8b)
@@ -1101,15 +1309,17 @@ if (length(.rows_8a) > 0) {
 # NOTE: full-vs-restricted is intentionally excluded from the default comparison
 # package.  The comparison question here is specifically whether adding Y6
 # exclusion (on top of Y1) changes results — not whether full vs restricted
-# scoring differs.  The table is written to InternalUse/ only for reference.
+# scoring differs. The diagnostic table is retained under extra/tables/comparison_diagnostics/.
 if (length(.rows_8b) > 0) {
-  .internal_csv <- file.path(outputs_dir, out_name, "InternalUse",
-                             "variant_comparison_full_vs_restricted_internal.csv")
+  .internal_csv <- file.path(
+    outputs_dir, out_name, "extra", "tables", "comparison_diagnostics",
+    "variant_comparison_full_vs_restricted_internal.csv"
+  )
   .internal_csv <- normalizePath(.internal_csv, mustWork = FALSE)
   dir.create(dirname(.internal_csv), showWarnings = FALSE, recursive = TRUE)
   .tmp <- do.call(rbind, .rows_8b)
   write.csv(.tmp, .internal_csv, row.names = FALSE, quote = TRUE)
-  cat("[INTERNAL] variant_comparison_full_vs_restricted_internal.csv (InternalUse only — not in default package)\n")
+  cat("[DIAGNOSTIC] variant_comparison_full_vs_restricted_internal.csv\n")
 }
 
 # ---------------------------------------------------------------------------
@@ -1158,35 +1368,39 @@ cat("[SUPPRESSED] \u00a78e variant_comparison_condition_by_sequence: subsumed by
 #   AI in Period 2 group — intervention_period == 2 → within-group paired
 # ---------------------------------------------------------------------------
 .rows_8f <- lapply(runs, function(r) {
-  run_name  <- r[["name"]]
+  run_name <- r[["name"]]
   run_label <- r[["label"]] %||% run_name
 
   rows <- list()
 
   # — Overall row (from pre-computed contrasts CSV) —
-  contrasts_f <- file.path(outputs_dir, run_name, "tables", "primary",
-                            "03_primary_contrasts.csv")
+  contrasts_f <- .find_table_file(run_name, "03_primary_contrasts.csv")
   if (file.exists(contrasts_f)) {
-    contrasts <- tryCatch(read.csv(contrasts_f, stringsAsFactors = FALSE,
-                                   check.names = FALSE),
-                          error = function(e) NULL)
+    contrasts <- tryCatch(
+      read.csv(contrasts_f,
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      ),
+      error = function(e) NULL
+    )
     if (!is.null(contrasts)) {
       int_row <- contrasts[
         grepl("Intervention vs Control", contrasts$Contrast, fixed = TRUE) &
-        grepl("restricted",              contrasts$Contrast, fixed = TRUE),
-        , drop = FALSE]
+          grepl("restricted", contrasts$Contrast, fixed = TRUE), ,
+        drop = FALSE
+      ]
       if (nrow(int_row) > 0) {
         pr <- int_row[1L, ]
         rows[[1L]] <- data.frame(
           "Exclusion Variant" = run_label,
-          "Group"             = "Overall",
-          "n"                 = pr[["N"]],
-          "AI Mean (SD)"      = pr[["Mean A (SD)"]],
+          "Group" = "Overall",
+          "n" = pr[["N"]],
+          "AI Mean (SD)" = pr[["Mean A (SD)"]],
           "Control Mean (SD)" = pr[["Mean B (SD)"]],
           "AI \u2212 Control" = pr[["Mean Diff"]],
-          "95% CI"            = pr[["95% CI"]],
-          "Cohen dz"          = pr[["Cohen dz"]],
-          "paired p"          = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
+          "95% CI" = pr[["95% CI"]],
+          "Cohen dz" = pr[["Cohen dz"]],
+          "paired p" = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
           stringsAsFactors = FALSE, check.names = FALSE
         )
       }
@@ -1194,7 +1408,7 @@ cat("[SUPPRESSED] \u00a78e variant_comparison_condition_by_sequence: subsumed by
   }
 
   # — Subgroup rows (from analysis_data.rds, within-group paired contrasts) —
-  rds_f <- file.path(outputs_dir, run_name, "rds", "analysis_data.rds")
+  rds_f <- .rds_file(run_name, "analysis_data.rds")
   if (file.exists(rds_f)) {
     dat_r <- tryCatch(readRDS(rds_f), error = function(e) NULL)
     if (!is.null(dat_r)) {
@@ -1203,36 +1417,45 @@ cat("[SUPPRESSED] \u00a78e variant_comparison_condition_by_sequence: subsumed by
         list(period = 2L, label = "AI in Period 2 (Control-first)")
       )) {
         sub_dat <- dat_r[dat_r[["intervention_period"]] == .grp$period, ,
-                         drop = FALSE]
-        int_col <- if ("intervention_score_restricted" %in% names(sub_dat))
-          "intervention_score_restricted" else "intervention_score_full"
-        ctl_col <- if ("control_score_restricted" %in% names(sub_dat))
-          "control_score_restricted" else "control_score_full"
+          drop = FALSE
+        ]
+        int_col <- if ("intervention_score_restricted" %in% names(sub_dat)) {
+          "intervention_score_restricted"
+        } else {
+          "intervention_score_full"
+        }
+        ctl_col <- if ("control_score_restricted" %in% names(sub_dat)) {
+          "control_score_restricted"
+        } else {
+          "control_score_full"
+        }
         if (!int_col %in% names(sub_dat) || !ctl_col %in% names(sub_dat)) next
         st <- .paired_contrast(sub_dat[[int_col]], sub_dat[[ctl_col]])
         if (is.null(st)) next
         rows[[length(rows) + 1L]] <- data.frame(
           "Exclusion Variant" = run_label,
-          "Group"             = .grp$label,
-          "n"                 = st$n,
-          "AI Mean (SD)"      = .fmt_ms_sub(st$m_a, st$sd_a),
+          "Group" = .grp$label,
+          "n" = st$n,
+          "AI Mean (SD)" = .fmt_ms_sub(st$m_a, st$sd_a),
           "Control Mean (SD)" = .fmt_ms_sub(st$m_b, st$sd_b),
           "AI \u2212 Control" = sprintf("%.3f", st$m_diff),
-          "95% CI"            = .fmt_ci_sub(st$ci_lo, st$ci_hi),
-          "Cohen dz"          = sprintf("%.3f", st$dz),
-          "paired p"          = .fmt_p_sub(st$p),
+          "95% CI" = .fmt_ci_sub(st$ci_lo, st$ci_hi),
+          "Cohen dz" = sprintf("%.3f", st$dz),
+          "paired p" = .fmt_p_sub(st$p),
           stringsAsFactors = FALSE, check.names = FALSE
         )
       }
     }
   }
 
-  if (length(rows) == 0) return(NULL)
+  if (length(rows) == 0) {
+    return(NULL)
+  }
   do.call(rbind, rows)
 })
 .rows_8f <- Filter(Negate(is.null), .rows_8f)
 if (length(.rows_8f) > 0) {
-  .df_8f    <- do.call(rbind, .rows_8f)
+  .df_8f <- do.call(rbind, .rows_8f)
   .notes_8f <- Filter(Negate(is.null), c(
     "Supporting table. Secondary to variant_comparison_overall_results (primary sensitivity analysis).",
     "Within-subject paired contrasts (AI vs. Control) labelled by randomised sequence group.",
@@ -1292,12 +1515,13 @@ if (length(.rows_8f) > 0) {
     "## Classification",
     "",
     "- **Type:** Supporting / Supplementary (secondary to variant_comparison_overall_results)",
-    "- **Source file(s):** tables/primary/03_primary_contrasts.csv (Overall row),",
-    "  rds/analysis_data.rds (subgroup rows) \u2014 per run"
+    "- **Source file(s):** extra/tables/condition_effects/03_primary_contrasts.csv (Overall row),",
+    "  extra/analysis_objects/analysis_data.rds (subgroup rows) \u2014 per run"
   )
   save_comp_table(.df_8f,
-                  "variant_comparison_subgroup_condition",
-                  notes = .notes_8f, sidecar = .sidecar_8f)
+    "variant_comparison_subgroup_condition",
+    notes = .notes_8f, sidecar = .sidecar_8f
+  )
 } else {
   message("[WARN] variant_comparison_subgroup_condition: no rows — table not written.")
 }
@@ -1317,35 +1541,39 @@ if (length(.rows_8f) > 0) {
 #   AI in Period 2 group — intervention_period == 2 → P2 − P1 paired
 # ---------------------------------------------------------------------------
 .rows_8g <- lapply(runs, function(r) {
-  run_name  <- r[["name"]]
+  run_name <- r[["name"]]
   run_label <- r[["label"]] %||% run_name
 
   rows <- list()
 
   # — Overall row (from pre-computed contrasts CSV) —
-  contrasts_f <- file.path(outputs_dir, run_name, "tables", "primary",
-                            "03_primary_contrasts.csv")
+  contrasts_f <- .find_table_file(run_name, "03_primary_contrasts.csv")
   if (file.exists(contrasts_f)) {
-    contrasts <- tryCatch(read.csv(contrasts_f, stringsAsFactors = FALSE,
-                                   check.names = FALSE),
-                          error = function(e) NULL)
+    contrasts <- tryCatch(
+      read.csv(contrasts_f,
+        stringsAsFactors = FALSE,
+        check.names = FALSE
+      ),
+      error = function(e) NULL
+    )
     if (!is.null(contrasts)) {
       per_row <- contrasts[
         grepl("Period 2 vs Period 1", contrasts$Contrast, fixed = TRUE) &
-        grepl("restricted",           contrasts$Contrast, fixed = TRUE),
-        , drop = FALSE]
+          grepl("restricted", contrasts$Contrast, fixed = TRUE), ,
+        drop = FALSE
+      ]
       if (nrow(per_row) > 0) {
         pr <- per_row[1L, ]
         rows[[1L]] <- data.frame(
           "Exclusion Variant" = run_label,
-          "Group"             = "Overall",
-          "n"                 = pr[["N"]],
-          "P2 Mean (SD)"      = pr[["Mean A (SD)"]],
-          "P1 Mean (SD)"      = pr[["Mean B (SD)"]],
-          "P2 \u2212 P1"      = pr[["Mean Diff"]],
-          "95% CI"            = pr[["95% CI"]],
-          "Cohen dz"          = pr[["Cohen dz"]],
-          "paired p"          = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
+          "Group" = "Overall",
+          "n" = pr[["N"]],
+          "P2 Mean (SD)" = pr[["Mean A (SD)"]],
+          "P1 Mean (SD)" = pr[["Mean B (SD)"]],
+          "P2 \u2212 P1" = pr[["Mean Diff"]],
+          "95% CI" = pr[["95% CI"]],
+          "Cohen dz" = pr[["Cohen dz"]],
+          "paired p" = .add_leading_zero(sub("^=\\s*", "", as.character(pr[["p"]]))),
           stringsAsFactors = FALSE, check.names = FALSE
         )
       }
@@ -1353,7 +1581,7 @@ if (length(.rows_8f) > 0) {
   }
 
   # — Subgroup rows (from analysis_data.rds, within-group paired contrasts) —
-  rds_f <- file.path(outputs_dir, run_name, "rds", "analysis_data.rds")
+  rds_f <- .rds_file(run_name, "analysis_data.rds")
   if (file.exists(rds_f)) {
     dat_r <- tryCatch(readRDS(rds_f), error = function(e) NULL)
     if (!is.null(dat_r)) {
@@ -1362,36 +1590,45 @@ if (length(.rows_8f) > 0) {
         list(period = 2L, label = "AI in Period 2 (Control-first)")
       )) {
         sub_dat <- dat_r[dat_r[["intervention_period"]] == .grp$period, ,
-                         drop = FALSE]
-        p2_col <- if ("period2_score_restricted" %in% names(sub_dat))
-          "period2_score_restricted" else "period2_score_full"
-        p1_col <- if ("period1_score_restricted" %in% names(sub_dat))
-          "period1_score_restricted" else "period1_score_full"
+          drop = FALSE
+        ]
+        p2_col <- if ("period2_score_restricted" %in% names(sub_dat)) {
+          "period2_score_restricted"
+        } else {
+          "period2_score_full"
+        }
+        p1_col <- if ("period1_score_restricted" %in% names(sub_dat)) {
+          "period1_score_restricted"
+        } else {
+          "period1_score_full"
+        }
         if (!p2_col %in% names(sub_dat) || !p1_col %in% names(sub_dat)) next
-        st <- .paired_contrast(sub_dat[[p2_col]], sub_dat[[p1_col]])  # P2 - P1
+        st <- .paired_contrast(sub_dat[[p2_col]], sub_dat[[p1_col]]) # P2 - P1
         if (is.null(st)) next
         rows[[length(rows) + 1L]] <- data.frame(
           "Exclusion Variant" = run_label,
-          "Group"             = .grp$label,
-          "n"                 = st$n,
-          "P2 Mean (SD)"      = .fmt_ms_sub(st$m_a, st$sd_a),
-          "P1 Mean (SD)"      = .fmt_ms_sub(st$m_b, st$sd_b),
-          "P2 \u2212 P1"      = sprintf("%.3f", st$m_diff),
-          "95% CI"            = .fmt_ci_sub(st$ci_lo, st$ci_hi),
-          "Cohen dz"          = sprintf("%.3f", st$dz),
-          "paired p"          = .fmt_p_sub(st$p),
+          "Group" = .grp$label,
+          "n" = st$n,
+          "P2 Mean (SD)" = .fmt_ms_sub(st$m_a, st$sd_a),
+          "P1 Mean (SD)" = .fmt_ms_sub(st$m_b, st$sd_b),
+          "P2 \u2212 P1" = sprintf("%.3f", st$m_diff),
+          "95% CI" = .fmt_ci_sub(st$ci_lo, st$ci_hi),
+          "Cohen dz" = sprintf("%.3f", st$dz),
+          "paired p" = .fmt_p_sub(st$p),
           stringsAsFactors = FALSE, check.names = FALSE
         )
       }
     }
   }
 
-  if (length(rows) == 0) return(NULL)
+  if (length(rows) == 0) {
+    return(NULL)
+  }
   do.call(rbind, rows)
 })
 .rows_8g <- Filter(Negate(is.null), .rows_8g)
 if (length(.rows_8g) > 0) {
-  .df_8g    <- do.call(rbind, .rows_8g)
+  .df_8g <- do.call(rbind, .rows_8g)
   .notes_8g <- Filter(Negate(is.null), c(
     "Supporting table. Secondary to variant_comparison_overall_results (primary sensitivity analysis).",
     "Within-subject paired period effect (P2 \u2212 P1) labelled by randomised sequence group.",
@@ -1453,12 +1690,13 @@ if (length(.rows_8g) > 0) {
     "## Classification",
     "",
     "- **Type:** Supporting / Supplementary (secondary to variant_comparison_overall_results)",
-    "- **Source file(s):** tables/primary/03_primary_contrasts.csv (Overall row),",
-    "  rds/analysis_data.rds (subgroup rows) \u2014 per run"
+    "- **Source file(s):** extra/tables/condition_effects/03_primary_contrasts.csv (Overall row),",
+    "  extra/analysis_objects/analysis_data.rds (subgroup rows) \u2014 per run"
   )
   save_comp_table(.df_8g,
-                  "variant_comparison_subgroup_period",
-                  notes = .notes_8g, sidecar = .sidecar_8g)
+    "variant_comparison_subgroup_period",
+    notes = .notes_8g, sidecar = .sidecar_8g
+  )
 } else {
   message("[WARN] variant_comparison_subgroup_period: no rows — table not written.")
 }
@@ -1473,26 +1711,32 @@ if (length(.rows_8g) > 0) {
 # ---------------------------------------------------------------------------
 {
   .rows_8h <- lapply(runs, function(r) {
-    run_name  <- r[["name"]]
+    run_name <- r[["name"]]
     run_label <- r[["label"]] %||% run_name
 
-    f <- file.path(outputs_dir, run_name, "tables", "psychometrics",
-                   "reliability_summary_full.csv")
+    f <- .find_table_file(run_name, "reliability_summary_full.csv")
     if (!file.exists(f)) {
       message("[WARN] reliability_summary_full.csv not found (8h) for '", run_name, "'")
       return(NULL)
     }
     df <- tryCatch(
       read.csv(f, stringsAsFactors = FALSE, check.names = FALSE),
-      error = function(e) { message("[WARN] ", e$message); NULL }
+      error = function(e) {
+        message("[WARN] ", e$message)
+        NULL
+      }
     )
-    if (is.null(df) || nrow(df) == 0L) return(NULL)
+    if (is.null(df) || nrow(df) == 0L) {
+      return(NULL)
+    }
 
     # Select the columns we want, tolerating missing optional ones
-    .want <- c("Form", "N", "Items", "KR-20", "Cronbach alpha",
-               "McDonald omega (total)", "Mean inter-item r", "Split-half (S-B)")
+    .want <- c(
+      "Form", "N", "Items", "KR-20", "Cronbach alpha",
+      "McDonald omega (total)", "Mean inter-item r", "Split-half (S-B)"
+    )
     .have <- intersect(.want, names(df))
-    df    <- df[, .have, drop = FALSE]
+    df <- df[, .have, drop = FALSE]
 
     # Prepend variant label
     cbind(`Exclusion Variant` = run_label, df, stringsAsFactors = FALSE)
@@ -1545,10 +1789,11 @@ if (length(.rows_8g) > 0) {
       "## Classification",
       "",
       "- **Type:** Supplementary / psychometric context",
-      "- **Source file(s):** tables/psychometrics/reliability_summary_full.csv (per run)"
+      "- **Source file(s):** extra/tables/psychometrics/reliability_summary_full.csv (per run)"
     )
     save_comp_table(.df_8h, "variant_comparison_reliability",
-                    notes = .sidecar_8h, sidecar = .sidecar_8h)
+      notes = .sidecar_8h, sidecar = .sidecar_8h
+    )
   } else {
     message("[WARN] variant_comparison_reliability: no rows — table not written.")
   }
@@ -1557,71 +1802,45 @@ if (length(.rows_8g) > 0) {
 cat("\nComparison tables written to: ", .comp_tbl_dir, "\n\n", sep = "")
 
 # ---------------------------------------------------------------------------
-# 9. Copy core manuscript tables from the primary run into the comparison package
+# 9. Copy core reference tables from the primary run into comparison extra/
 # ---------------------------------------------------------------------------
-# The comparison output folder is the manuscript assembly point.  The canonical
-# per-study tables (00_overall_results, 00_study_design) are generated by the
-# main pipeline and live in per-run folders.  This section copies them into a
-# clearly labelled subfolder so the comparison package is self-contained.
-#
-# Source run:  comp$primary_run (set in comparison config); falls back to the
-#              first run in the list if the key is absent.
-#
-# Destination: tables/core_from_main_run/   (CSV)
-#              tables_png/core_from_main_run/ (PNG)
+# Comparison outputs are not manuscript-selected material. Keep them under
+# extra/tables/core_from_main_run with CSV and PNG side by side.
 {
   .primary_run_name <- comp[["primary_run"]] %||% runs[[1]][["name"]]
-  .primary_run_dir  <- file.path(outputs_dir, .primary_run_name)
 
-  .core_csv_dst <- file.path(outputs_dir, out_name, "tables",     "core_from_main_run")
-  .core_png_dst <- file.path(outputs_dir, out_name, "tables_png", "core_from_main_run")
-  dir.create(.core_csv_dst, recursive = TRUE, showWarnings = FALSE)
-  dir.create(.core_png_dst, recursive = TRUE, showWarnings = FALSE)
-
-  # Each entry: list(tbl_sub, png_sub, name)
-  #   tbl_sub / png_sub = subfolder inside the per-run tables / tables_png dir
-  .core_files <- list(
-    list(tbl_sub = "primary",     png_sub = "primary",     name = "00_overall_results"),
-    list(tbl_sub = "descriptive", png_sub = "descriptive", name = "00_study_design")
+  .core_dst <- file.path(
+    outputs_dir, out_name, "extra", "tables", "core_from_main_run"
   )
+  dir.create(.core_dst, recursive = TRUE, showWarnings = FALSE)
+
+  .core_files <- c("00_overall_results", "00_study_design")
 
   cat("Copying core tables from primary run '", .primary_run_name, "'...\n", sep = "")
 
-  for (.cf in .core_files) {
-    .csv_src <- file.path(.primary_run_dir, "tables",     .cf$tbl_sub, paste0(.cf$name, ".csv"))
-    .png_src <- file.path(.primary_run_dir, "tables_png", .cf$png_sub, paste0(.cf$name, ".png"))
-    .csv_dst <- file.path(.core_csv_dst, paste0(.cf$name, ".csv"))
-    .png_dst <- file.path(.core_png_dst, paste0(.cf$name, ".png"))
+  for (.name in .core_files) {
+    .csv_src <- .find_table_file(.primary_run_name, paste0(.name, ".csv"))
+    .png_src <- .find_table_file(.primary_run_name, paste0(.name, ".png"))
+    .csv_dst <- file.path(.core_dst, paste0(.name, ".csv"))
+    .png_dst <- file.path(.core_dst, paste0(.name, ".png"))
 
     if (file.exists(.csv_src)) {
       file.copy(.csv_src, .csv_dst, overwrite = TRUE)
-      cat(sprintf("  [CSV] core_from_main_run/%s.csv  <-  %s/tables/%s/%s.csv\n",
-                  .cf$name, .primary_run_name, .cf$tbl_sub, .cf$name))
+      cat("  [CSV] core_from_main_run/", .name, ".csv\n", sep = "")
     } else {
-      cat(sprintf("  [MISSING] %s not found in primary run '%s' -- skipped\n",
-                  paste0(.cf$name, ".csv"), .primary_run_name))
+      cat("  [MISSING] ", .name, ".csv in primary run\n", sep = "")
     }
 
     if (file.exists(.png_src)) {
       file.copy(.png_src, .png_dst, overwrite = TRUE)
-      cat(sprintf("  [PNG] core_from_main_run/%s.png  <-  %s/tables_png/%s/%s.png\n",
-                  .cf$name, .primary_run_name, .cf$png_sub, .cf$name))
+      cat("  [PNG] core_from_main_run/", .name, ".png\n", sep = "")
     } else {
-      cat(sprintf("  [MISSING] %s not found in primary run '%s' -- skipped\n",
-                  paste0(.cf$name, ".png"), .primary_run_name))
+      cat("  [MISSING] ", .name, ".png in primary run\n", sep = "")
     }
   }
 
-  cat("Core tables destination : ", .core_csv_dst, "\n", sep = "")
-  cat("\n")
+  cat("Core tables destination : ", .core_dst, "\n\n", sep = "")
 }
 
-# --- Output audit for the comparison directory ---
-{
-  .audit_path <- file.path(r_dir, "09_audit.R")
-  if (file.exists(.audit_path))
-    tryCatch(source(.audit_path, echo = FALSE),
-             error = function(e)
-               cat("[WARN] Audit script failed:", conditionMessage(e), "\n"))
-}
-
+# Comparison output is intentionally limited to semantic figures/tables. The
+# old audit/provenance directory tree is not generated here.

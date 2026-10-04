@@ -7,11 +7,14 @@
 
 .script_dir <- local({
   d <- Sys.getenv("R_SCRIPTS_DIR", unset = "")
-  if (nzchar(d)) return(d)
+  if (nzchar(d)) {
+    return(d)
+  }
   for (i in rev(seq_along(sys.frames()))) {
     f <- sys.frames()[[i]]$ofile
-    if (!is.null(f) && nzchar(f))
+    if (!is.null(f) && nzchar(f)) {
       return(dirname(normalizePath(f, winslash = "/")))
+    }
   }
   normalizePath("R", winslash = "/")
 })
@@ -19,13 +22,17 @@ source(file.path(.script_dir, "00_setup.R"))
 log_h1("10  MANUSCRIPT SELECTED OUTPUTS")
 
 cfg <- read_config()
+.reviewer_mode <- identical(
+  tolower(trimws(Sys.getenv("PIPELINE_MODE", unset = "standard"))),
+  "reviewer"
+)
 results <- load_rds("analysis_results")
 score_meta <- results$score_metadata %||%
   tryCatch(load_rds("score_metadata"), error = function(e) NULL)
 dat <- tryCatch(load_rds("analysis_data"), error = function(e) NULL)
 
-.out_root <- file.path(PROJ_ROOT, "outputs", STUDY_NAME)
-.sel_root <- file.path(.out_root, "manuscript_selected")
+.out_root <- out_path()
+.sel_root <- out_path("manuscript_selected")
 
 .disallowed_path_terms <- c(
   intToUtf8(c(65, 108, 101, 120)),
@@ -48,7 +55,7 @@ dat <- tryCatch(load_rds("analysis_data"), error = function(e) NULL)
 .out_norm <- normalizePath(.out_root, winslash = "/", mustWork = FALSE)
 .sel_norm <- normalizePath(.sel_root, winslash = "/", mustWork = FALSE)
 if (!startsWith(.sel_norm, paste0(.out_norm, "/")) ||
-    identical(.sel_norm, .out_norm)) {
+  identical(.sel_norm, .out_norm)) {
   stop("Refusing to reset manuscript_selected outside the study output folder.")
 }
 if (dir.exists(.sel_root)) unlink(.sel_root, recursive = TRUE, force = TRUE)
@@ -81,9 +88,22 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
   invisible(target_path)
 }
 
+.resolve_output_source <- function(source_rel) {
+  rel <- gsub("\\\\", "/", source_rel)
+  parts <- strsplit(rel, "/", fixed = TRUE)[[1L]]
+  do.call(out_path, as.list(parts))
+}
+
+.relative_to_output_root <- function(path) {
+  root <- normalizePath(.out_root, winslash = "/", mustWork = FALSE)
+  pth <- normalizePath(path, winslash = "/", mustWork = FALSE)
+  prefix <- paste0(root, "/")
+  if (startsWith(pth, prefix)) substring(pth, nchar(prefix) + 1L) else pth
+}
+
 .copy_selected <- function(source_rel, target_rel, description, role, label,
                            required = TRUE) {
-  source_path <- file.path(.out_root, source_rel)
+  source_path <- .resolve_output_source(source_rel)
   target_path <- file.path(.sel_root, target_rel)
   dir.create(dirname(target_path), recursive = TRUE, showWarnings = FALSE)
 
@@ -95,7 +115,7 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
 
   .add_record(
     target_rel = target_rel,
-    source_rel = source_rel,
+    source_rel = .relative_to_output_root(source_path),
     description = description,
     role = role,
     label = label,
@@ -105,80 +125,81 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
 
 .manuscript_table_style <- function(table_rel, df) {
   cols <- names(df)
-  equal_widths <- stats::setNames(rep(100 / max(length(cols), 1), length(cols)), cols)
-  key <- tolower(basename(table_rel %||% ""))
+  key <- tools::file_path_sans_ext(tolower(basename(table_rel %||% "")))
 
-  style <- list(
-    widths = equal_widths,
-    left_cols = intersect(
-      cols,
-      c("Condition", "Model", "Contrast", "Test", "Difference definition",
-        "Randomized sequence", "Measure", "Measure_1")
-    ),
-    center_cols = character(0),
-    right_cols = character(0),
-    labels = stats::setNames(cols, cols),
-    font_size = 15,
-    vwidth = 1100,
-    row_padding = 5,
-    header_padding = 7,
-    horizontal_padding = 10,
-    divider_after = character(0)
+  ms_cfg <- cfg$tables$manuscript %||% list()
+  style_cfg <- (ms_cfg$styles %||% list())[[key]] %||% list()
+
+  equal_widths <- stats::setNames(
+    rep(100 / max(length(cols), 1), length(cols)),
+    cols
   )
 
-  if (grepl("table1a_score_descriptive_summary|table_s5_descriptive_scores", key)) {
-    style$widths <- stats::setNames(c(24, 9, 22, 29, 16), cols)
-    style$left_cols <- intersect(cols, "Condition")
-    style$center_cols <- setdiff(cols, style$left_cols)
-    style$divider_after <- intersect(cols, "Condition")
-  } else if (grepl("table1b_primary_paired_contrast", key)) {
-    style$widths <- stats::setNames(c(67, 33), cols)
-    style$left_cols <- intersect(cols, "Statistic")
-    style$right_cols <- intersect(cols, "Estimate")
-    style$font_size <- 15
-    style$vwidth <- 700
-    style$row_padding <- 4
-    style$header_padding <- 5
-    style$horizontal_padding <- 18
-    style$divider_after <- intersect(cols, "Statistic")
-  } else if (grepl("table2_supporting_analysis_summary", key)) {
-    style$widths <- stats::setNames(c(24, 36, 24, 8, 8), cols)
-    style$left_cols <- intersect(cols, c("Model", "Contrast"))
-    style$center_cols <- setdiff(cols, style$left_cols)
-    style$divider_after <- intersect(cols, "Contrast")
-  } else if (grepl("table_s1_post_hoc_power_analysis", key)) {
-    style$widths <- stats::setNames(c(25, 29, 14, 16, 16), cols)
-    style$left_cols <- character(0)
-    style$center_cols <- cols
-    style$divider_after <- intersect(cols, "Target difference (score units)")
-  } else if (grepl("table_s2_sign_permutation_tests", key)) {
-    style$widths <- stats::setNames(c(29, 25, 7, 10, 23, 6), cols)
-    style$left_cols <- intersect(cols, c("Test", "Difference definition"))
-    style$center_cols <- setdiff(cols, style$left_cols)
-    style$font_size <- 14
-    style$divider_after <- intersect(cols, "Difference definition")
-  } else if (grepl("table_s3_logistic_mixed_model_results", key)) {
-    style$widths <- stats::setNames(c(20, 28, 14, 8, 18, 6, 6), cols)
-    style$left_cols <- intersect(cols, c("Model", "Contrast"))
-    style$center_cols <- setdiff(cols, style$left_cols)
-    style$font_size <- 14
-    style$divider_after <- intersect(cols, "Contrast")
-  } else if (grepl("table_s4_randomized_sequence_paired_differences", key)) {
-    style$widths <- stats::setNames(c(25, 8, 22, 22, 23), cols)
-    style$left_cols <- intersect(cols, "Randomized sequence")
-    style$center_cols <- setdiff(cols, style$left_cols)
-    style$divider_after <- intersect(cols, "Randomized sequence")
+  configured_widths <- suppressWarnings(as.numeric(unlist(
+    style_cfg$widths %||% numeric(),
+    use.names = FALSE
+  )))
+
+  widths <- if (length(configured_widths) == length(cols)) {
+    stats::setNames(configured_widths, cols)
   } else {
-    style$center_cols <- setdiff(cols, style$left_cols)
+    equal_widths
   }
 
-  style$widths <- style$widths[names(style$widths) %in% cols]
-  style$left_cols <- intersect(style$left_cols, cols)
-  style$center_cols <- intersect(style$center_cols, cols)
-  style$right_cols <- intersect(style$right_cols, cols)
-  style$labels <- style$labels[names(style$labels) %in% cols]
-  style$divider_after <- intersect(style$divider_after, utils::head(cols, -1L))
-  style
+  left_cols <- intersect(
+    as.character(unlist(style_cfg$left_cols %||% character(), use.names = FALSE)),
+    cols
+  )
+  right_cols <- intersect(
+    as.character(unlist(style_cfg$right_cols %||% character(), use.names = FALSE)),
+    cols
+  )
+
+  center_cols <- if (isTRUE(style_cfg$center_all %||% FALSE)) {
+    cols
+  } else {
+    setdiff(cols, union(left_cols, right_cols))
+  }
+
+  divider_after <- intersect(
+    as.character(style_cfg$divider_after %||% character()),
+    utils::head(cols, -1L)
+  )
+
+  list(
+    widths = widths,
+    left_cols = left_cols,
+    center_cols = center_cols,
+    right_cols = right_cols,
+    labels = stats::setNames(cols, cols),
+    font_size = as.numeric(
+      style_cfg$font_size %||% ms_cfg$font_size %||% 17
+    ),
+    vwidth = as.numeric(
+      style_cfg$vwidth %||% ms_cfg$vwidth %||% 1120
+    ),
+    table_width_pct = as.numeric(
+      style_cfg$table_width_pct %||% ms_cfg$table_width_pct %||% 94
+    ),
+    row_padding = as.numeric(
+      style_cfg$row_padding_px %||% ms_cfg$row_padding_px %||% 6
+    ),
+    header_padding = as.numeric(
+      style_cfg$header_padding_px %||% ms_cfg$header_padding_px %||% 8
+    ),
+    horizontal_padding = as.numeric(
+      style_cfg$horizontal_padding_px %||% ms_cfg$horizontal_padding_px %||% 10
+    ),
+    export_expand = as.numeric(
+      style_cfg$export_expand_px %||% ms_cfg$export_expand_px %||% 12
+    ),
+    source_note_size_offset = as.numeric(
+      style_cfg$source_note_size_offset %||%
+        ms_cfg$source_note_size_offset %||%
+        1
+    ),
+    divider_after = divider_after
+  )
 }
 
 .write_table_png <- function(df, png_path, caption = NULL, notes = NULL,
@@ -187,128 +208,137 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
   .ok <- FALSE
 
   if (requireNamespace("gt", quietly = TRUE)) {
-    .ok <- tryCatch({
-      ensure_gt_png_export()
-      display_names <- names(df)
-      gt_df <- df
-      if (anyDuplicated(names(gt_df))) {
-        names(gt_df) <- make.unique(names(gt_df), sep = "_")
-      }
-      style <- .manuscript_table_style(table_rel %||% png_path, gt_df)
-      style$labels <- stats::setNames(display_names, names(gt_df))
+    .ok <- tryCatch(
+      {
+        ensure_gt_png_export()
+        display_names <- names(df)
+        gt_df <- df
+        if (anyDuplicated(names(gt_df))) {
+          names(gt_df) <- make.unique(names(gt_df), sep = "_")
+        }
+        style <- .manuscript_table_style(table_rel %||% png_path, gt_df)
+        style$labels <- stats::setNames(display_names, names(gt_df))
 
-      gt_tbl <- gt::gt(gt_df)
-      if (length(style$labels) > 0) {
-        gt_tbl <- gt::cols_label(gt_tbl, .list = as.list(style$labels))
-      }
-      if (length(style$widths) > 0) {
-        width_formulas <- lapply(names(style$widths), function(col) {
-          rlang::new_formula(rlang::sym(col), gt::pct(style$widths[[col]]))
-        })
-        gt_tbl <- gt::cols_width(gt_tbl, .list = width_formulas)
-      }
-      if (length(style$left_cols) > 0) {
-        gt_tbl <- gt::cols_align(
-          gt_tbl, align = "left", columns = dplyr::all_of(style$left_cols)
-        )
-      }
-      if (length(style$center_cols) > 0) {
-        gt_tbl <- gt::cols_align(
-          gt_tbl, align = "center", columns = dplyr::all_of(style$center_cols)
-        )
-      }
-      if (length(style$right_cols) > 0) {
-        gt_tbl <- gt::cols_align(
-          gt_tbl, align = "right", columns = dplyr::all_of(style$right_cols)
-        )
-      }
-      gt_tbl <- gt_tbl |>
-        gt::tab_options(
-          table.width = gt::pct(100),
-          table.layout = "fixed",
-          table.align = "left",
-          container.width = gt::px(style$vwidth),
-          container.padding.x = gt::px(0),
-          container.padding.y = gt::px(0),
-          table.background.color = "white",
-          table.font.size = style$font_size,
-          heading.title.font.size = 13,
-          heading.subtitle.font.size = 11,
-          column_labels.font.weight = "bold",
-          column_labels.background.color = "white",
-          column_labels.padding = gt::px(style$header_padding),
-          column_labels.padding.horizontal = gt::px(style$horizontal_padding),
-          column_labels.vlines.style = "none",
-          column_labels.border.top.style = "none",
-          column_labels.border.bottom.style = "solid",
-          column_labels.border.bottom.width = gt::px(1.3),
-          column_labels.border.bottom.color = "#4D4D4D",
-          table.border.top.style = "solid",
-          table.border.top.width = gt::px(1.5),
-          table.border.top.color = "#4D4D4D",
-          table.border.bottom.style = "solid",
-          table.border.bottom.width = gt::px(1.5),
-          table.border.bottom.color = "#4D4D4D",
-          table.border.left.style = "none",
-          table.border.right.style = "none",
-          table_body.hlines.style = "solid",
-          table_body.hlines.width = gt::px(0.7),
-          table_body.hlines.color = "#D8D8D8",
-          table_body.vlines.style = "none",
-          table_body.border.top.style = "none",
-          table_body.border.bottom.style = "none",
-          data_row.padding = gt::px(style$row_padding),
-          data_row.padding.horizontal = gt::px(style$horizontal_padding),
-          source_notes.font.size = style$font_size - 1,
-          source_notes.padding = gt::px(7),
-          source_notes.border.bottom.style = "none"
-        ) |>
-        gt::tab_style(
-          style = gt::cell_text(align = "center"),
-          locations = gt::cells_column_labels(columns = dplyr::everything())
-        )
-      if (length(style$divider_after) > 0) {
-        divider_col <- style$divider_after[1]
-        divider_rule <- gt::cell_borders(
-          sides = "right",
-          color = "#E6E6E6",
-          style = "solid",
-          weight = gt::px(0.6)
-        )
+        gt_tbl <- gt::gt(gt_df)
+        if (length(style$labels) > 0) {
+          gt_tbl <- gt::cols_label(gt_tbl, .list = as.list(style$labels))
+        }
+        if (length(style$widths) > 0) {
+          width_formulas <- lapply(names(style$widths), function(col) {
+            rlang::new_formula(rlang::sym(col), gt::pct(style$widths[[col]]))
+          })
+          gt_tbl <- gt::cols_width(gt_tbl, .list = width_formulas)
+        }
+        if (length(style$left_cols) > 0) {
+          gt_tbl <- gt::cols_align(
+            gt_tbl,
+            align = "left", columns = dplyr::all_of(style$left_cols)
+          )
+        }
+        if (length(style$center_cols) > 0) {
+          gt_tbl <- gt::cols_align(
+            gt_tbl,
+            align = "center", columns = dplyr::all_of(style$center_cols)
+          )
+        }
+        if (length(style$right_cols) > 0) {
+          gt_tbl <- gt::cols_align(
+            gt_tbl,
+            align = "right", columns = dplyr::all_of(style$right_cols)
+          )
+        }
         gt_tbl <- gt_tbl |>
-          gt::tab_style(
-            style = divider_rule,
-            locations = gt::cells_column_labels(columns = dplyr::all_of(divider_col))
+          gt::tab_options(
+            table.width = gt::pct(style$table_width_pct),
+            table.layout = "fixed",
+            table.align = "center",
+            container.width = gt::px(style$vwidth),
+            container.padding.x = gt::px(0),
+            container.padding.y = gt::px(0),
+            table.background.color = "white",
+            table.font.size = style$font_size,
+            heading.title.font.size = 13,
+            heading.subtitle.font.size = 14,
+            column_labels.font.weight = "bold",
+            column_labels.background.color = "white",
+            column_labels.padding = gt::px(style$header_padding),
+            column_labels.padding.horizontal = gt::px(style$horizontal_padding),
+            column_labels.vlines.style = "none",
+            column_labels.border.top.style = "none",
+            column_labels.border.bottom.style = "solid",
+            column_labels.border.bottom.width = gt::px(1.3),
+            column_labels.border.bottom.color = "#4D4D4D",
+            table.border.top.style = "solid",
+            table.border.top.width = gt::px(1.5),
+            table.border.top.color = "#4D4D4D",
+            table.border.bottom.style = "solid",
+            table.border.bottom.width = gt::px(1.5),
+            table.border.bottom.color = "#4D4D4D",
+            table.border.left.style = "none",
+            table.border.right.style = "none",
+            table_body.hlines.style = "solid",
+            table_body.hlines.width = gt::px(0.7),
+            table_body.hlines.color = "#D8D8D8",
+            table_body.vlines.style = "none",
+            table_body.border.top.style = "none",
+            table_body.border.bottom.style = "none",
+            data_row.padding = gt::px(style$row_padding),
+            data_row.padding.horizontal = gt::px(style$horizontal_padding),
+            source_notes.font.size = style$font_size - style$source_note_size_offset,
+            source_notes.padding = gt::px(7),
+            source_notes.border.bottom.style = "none"
           ) |>
           gt::tab_style(
-            style = divider_rule,
-            locations = gt::cells_body(columns = dplyr::all_of(divider_col))
+            style = gt::cell_text(align = "center"),
+            locations = gt::cells_column_labels(columns = dplyr::everything())
           )
-      }
-      if (!is.null(notes) && length(notes) > 0) {
-        for (.note in notes) {
-          gt_tbl <- gt_tbl |> gt::tab_source_note(gt::md(.note))
+        if (length(style$divider_after) > 0) {
+          divider_col <- style$divider_after[1]
+          divider_rule <- gt::cell_borders(
+            sides = "right",
+            color = "#E6E6E6",
+            style = "solid",
+            weight = gt::px(0.6)
+          )
+          gt_tbl <- gt_tbl |>
+            gt::tab_style(
+              style = divider_rule,
+              locations = gt::cells_column_labels(columns = dplyr::all_of(divider_col))
+            ) |>
+            gt::tab_style(
+              style = divider_rule,
+              locations = gt::cells_body(columns = dplyr::all_of(divider_col))
+            )
         }
+        if (!is.null(notes) && length(notes) > 0) {
+          for (.note in notes) {
+            gt_tbl <- gt_tbl |> gt::tab_source_note(gt::md(.note))
+          }
+        }
+        .saved <- FALSE
+        .save_error <- NULL
+        for (.attempt in seq_len(2L)) {
+          .saved <- tryCatch(
+            {
+              gt::gtsave(gt_tbl, png_path, vwidth = style$vwidth, expand = style$export_expand)
+              TRUE
+            },
+            error = function(e) {
+              .save_error <<- e
+              FALSE
+            }
+          )
+          if (.saved) break
+          Sys.sleep(0.75)
+        }
+        if (!.saved) stop(.save_error)
+        TRUE
+      },
+      error = function(e) {
+        log_warn("gt PNG export failed for selected table: ", conditionMessage(e))
+        FALSE
       }
-      .saved <- FALSE
-      .save_error <- NULL
-      for (.attempt in seq_len(2L)) {
-        .saved <- tryCatch({
-          gt::gtsave(gt_tbl, png_path, vwidth = style$vwidth, expand = 5)
-          TRUE
-        }, error = function(e) {
-          .save_error <<- e
-          FALSE
-        })
-        if (.saved) break
-        Sys.sleep(0.75)
-      }
-      if (!.saved) stop(.save_error)
-      TRUE
-    }, error = function(e) {
-      log_warn("gt PNG export failed for selected table: ", conditionMessage(e))
-      FALSE
-    })
+    )
   }
 
   if (!.ok) {
@@ -329,14 +359,16 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
   if (length(lines) == 0) {
     return(data.frame())
   }
-  utils::read.csv(text = paste(lines, collapse = "\n"),
-                  check.names = FALSE, stringsAsFactors = FALSE)
+  utils::read.csv(
+    text = paste(lines, collapse = "\n"),
+    check.names = FALSE, stringsAsFactors = FALSE
+  )
 }
 
 .copy_selected_table <- function(source_csv_rel, target_csv_rel, target_png_rel,
                                  description, role, label,
                                  required = TRUE) {
-  source_path <- file.path(.out_root, source_csv_rel)
+  source_path <- .resolve_output_source(source_csv_rel)
   csv_path <- file.path(.sel_root, target_csv_rel)
   png_path <- file.path(.sel_root, target_png_rel)
   dir.create(dirname(csv_path), recursive = TRUE, showWarnings = FALSE)
@@ -350,8 +382,9 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
     log_warn("Missing manuscript-selected source: ", source_path)
   }
 
-  .add_record(target_csv_rel, source_csv_rel, description, role, label, required)
-  .add_record(target_png_rel, source_csv_rel, description, role, label, required)
+  .source_rel_actual <- .relative_to_output_root(source_path)
+  .add_record(target_csv_rel, .source_rel_actual, description, role, label, required)
+  .add_record(target_png_rel, .source_rel_actual, description, role, label, required)
   invisible(csv_path)
 }
 
@@ -362,19 +395,22 @@ invisible(lapply(.dirs, dir.create, recursive = TRUE, showWarnings = FALSE))
   png_path <- file.path(.sel_root, png_rel)
   dir.create(dirname(csv_path), recursive = TRUE, showWarnings = FALSE)
   utils::write.csv(df, csv_path, row.names = FALSE, na = "")
-  .write_table_png(df, png_path, caption = caption, notes = notes,
-                   table_rel = png_rel)
+  .write_table_png(df, png_path,
+    caption = caption, notes = notes,
+    table_rel = png_rel
+  )
   .add_record(csv_rel, source_rel, description, role, label, required)
   .add_record(png_rel, source_rel, description, role, label, required)
   invisible(df)
 }
 
 .save_selected_plot <- function(plot, target_rel, description, role, label,
-                                source_rel = "rds/analysis_results.rds",
-                                width = 7.5, height = 5, dpi = 300,
+                                source_rel = "extra/analysis_objects/analysis_results.rds",
+                                width = 7.5, height = 5, dpi = NULL,
                                 required = TRUE) {
   target_path <- file.path(.sel_root, target_rel)
   dir.create(dirname(target_path), recursive = TRUE, showWarnings = FALSE)
+  dpi <- dpi %||% as.numeric(cfg$figures$dpi %||% 300)
   ggplot2::ggsave(
     filename = target_path,
     plot = plot,
@@ -420,15 +456,23 @@ if (!all(c(.ai_percent_col, .noai_percent_col, .ai_score_col, .noai_score_col) %
 .ctl_label <- cfg$study$control_label %||% "Control"
 .int_label <- cfg$study$intervention_label %||% "Intervention"
 .seq_colors <- stats::setNames(
-  c(cfg$figures$color_seq_ba %||% "#CD853F",
-    cfg$figures$color_seq_ab %||% "#2E8B57"),
-  c(sequence_display_label(paste0(.ctl_label, "-first"), cfg),
-    sequence_display_label(paste0(.int_label, "-first"), cfg))
+  c(
+    cfg$figures$color_seq_ba %||% "#CD853F",
+    cfg$figures$color_seq_ab %||% "#2E8B57"
+  ),
+  c(
+    sequence_display_label(paste0(.ctl_label, "-first"), cfg),
+    sequence_display_label(paste0(.int_label, "-first"), cfg)
+  )
 )
+.ctl_display <- condition_display_label(.ctl_label, cfg)
+.int_display <- condition_display_label(.int_label, cfg)
 .condition_colors <- stats::setNames(
-  c(cfg$figures$color_control %||% "#CD853F",
-    cfg$figures$color_intervention %||% "#2E8B57"),
-  c("No-AI", "AI-assisted")
+  c(
+    cfg$figures$color_control %||% "#CD853F",
+    cfg$figures$color_intervention %||% "#2E8B57"
+  ),
+  c(.ctl_display, .int_display)
 )
 
 # ---------------------------------------------------------------------------
@@ -443,8 +487,8 @@ if (is.null(.power) || is.null(.power$table)) {
 .effect_pct <- as.integer(.power$target_effects_pct)
 .actual_n <- as.integer(.power$table$n_for_target_power)
 if (length(.effect_pct) != nrow(.power$table) ||
-    length(.actual_n) != nrow(.power$table) ||
-    any(!is.finite(.effect_pct)) || any(!is.finite(.actual_n))) {
+  length(.actual_n) != nrow(.power$table) ||
+  any(!is.finite(.effect_pct)) || any(!is.finite(.actual_n))) {
   stop(
     "Post hoc power results are incomplete or inconsistent with their table."
   )
@@ -476,10 +520,12 @@ names(.power_table)[names(.power_table) == "n_for_target_power"] <- .n_power_col
   Condition = as.character(.supp_desc$condition),
   N = .supp_desc$n,
   `Mean (SD)` = sprintf("%.2f (%.2f)", .supp_desc$mean, .supp_desc$sd),
-  `Median [IQR]` = sprintf("%.2f [%.2f, %.2f]",
-                           .supp_desc$median,
-                           .supp_desc$iqr_low,
-                           .supp_desc$iqr_high),
+  `Median [IQR]` = sprintf(
+    "%.2f [%.2f, %.2f]",
+    .supp_desc$median,
+    .supp_desc$iqr_low,
+    .supp_desc$iqr_high
+  ),
   Range = sprintf("%.2f-%.2f", .supp_desc$min, .supp_desc$max),
   check.names = FALSE
 )
@@ -498,14 +544,16 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 .perm_dist <- .sign$permutation_distribution$permuted_mean_difference
 .p_one <- mean(.perm_dist >= .obs_diff)
 .perm_two_p <- .sign$table$p[grepl("permutation", .sign$table$Test,
-                                   ignore.case = TRUE)][1]
+  ignore.case = TRUE
+)][1]
 
 .condition_row <- .log_tbl[.log_tbl$Term == "AI-assisted vs No-AI", , drop = FALSE][1, ]
 .period_row <- .log_tbl[.log_tbl$Term == "Period 2 vs Period 1", , drop = FALSE][1, ]
 
 .sign_total_n <- nrow(.sign$paired_differences)
 .sign_non_tied_n <- sum(.sign$paired_differences$paired_diff != 0,
-                        na.rm = TRUE)
+  na.rm = TRUE
+)
 .sign_ties <- .sign_total_n - .sign_non_tied_n
 .perm_assignments_label <- paste0(
   "2^", .sign_total_n, " = ",
@@ -521,9 +569,9 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     "Fisher-Pitman, exploratory one-sided"
   ),
   `Difference definition` = c(
-    "AI-assisted minus No-AI",
-    "AI-assisted minus No-AI",
-    "AI-assisted greater than No-AI"
+    paste0(.int_display, " minus ", .ctl_display),
+    paste0(.int_display, " minus ", .ctl_display),
+    paste0(.int_display, " greater than ", .ctl_display)
   ),
   N = rep(.sign_total_n, 3),
   `Non-tied n` = c(.sign_non_tied_n, "", ""),
@@ -603,19 +651,25 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 .paired_desc_tbl <- data.frame(
   Scoring = .paired$scoring,
   Metric = "Percent correct",
-  Contrast = "AI-assisted minus No-AI",
+  Contrast = paste0(.int_display, " minus ", .ctl_display),
   N = .paired$n,
-  `AI-assisted mean (SD)` = sprintf("%.1f (%.1f)",
-                                    .to_pct(.paired[["AI-assisted mean"]]),
-                                    .to_pct(.paired[["AI-assisted SD"]])),
-  `No-AI mean (SD)` = sprintf("%.1f (%.1f)",
-                              .to_pct(.paired[["No-AI mean"]]),
-                              .to_pct(.paired[["No-AI SD"]])),
+  `AI-assisted mean (SD)` = sprintf(
+    "%.1f (%.1f)",
+    .to_pct(.paired[["AI-assisted mean"]]),
+    .to_pct(.paired[["AI-assisted SD"]])
+  ),
+  `No-AI mean (SD)` = sprintf(
+    "%.1f (%.1f)",
+    .to_pct(.paired[["No-AI mean"]]),
+    .to_pct(.paired[["No-AI SD"]])
+  ),
   `Mean paired difference (pp)` = .to_pct(.paired[["Mean paired difference"]]),
   `SD paired difference (pp)` = .to_pct(.paired[["SD paired difference"]]),
-  `95% CI (pp)` = sprintf("[%.1f, %.1f]",
-                          .to_pct(.paired[["95% CI low"]]),
-                          .to_pct(.paired[["95% CI high"]])),
+  `95% CI (pp)` = sprintf(
+    "[%.1f, %.1f]",
+    .to_pct(.paired[["95% CI low"]]),
+    .to_pct(.paired[["95% CI high"]])
+  ),
   `Cohen's dz` = round(.paired[["Cohen dz"]], 3),
   `Hedges gz` = round(.paired[["Hedges gz"]], 3),
   t = round(.paired$t, 3),
@@ -651,12 +705,16 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 .sequence_desc_tbl <- data.frame(
   `Randomized sequence` = .seq_desc$sequence_display,
   N = .seq_desc$n,
-  `AI-assisted mean (SD)` = sprintf("%.2f (%.2f)",
-                                    .seq_desc[["AI-assisted mean"]],
-                                    .seq_desc[["AI-assisted SD"]]),
-  `No-AI mean (SD)` = sprintf("%.2f (%.2f)",
-                              .seq_desc[["No-AI mean"]],
-                              .seq_desc[["No-AI SD"]]),
+  `AI-assisted mean (SD)` = sprintf(
+    "%.2f (%.2f)",
+    .seq_desc[["AI-assisted mean"]],
+    .seq_desc[["AI-assisted SD"]]
+  ),
+  `No-AI mean (SD)` = sprintf(
+    "%.2f (%.2f)",
+    .seq_desc[["No-AI mean"]],
+    .seq_desc[["No-AI SD"]]
+  ),
   `Paired difference, mean (SD)` = sprintf(
     "%.3f (%.3f)",
     .seq_desc[["Mean paired difference"]],
@@ -669,13 +727,19 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 .glmm_compact_tbl <- .glmm_or_tbl
 
 .reference_theme <- function() {
-  ggplot2::theme_bw(base_size = 13) +
+  ms_fig_cfg <- cfg$figures$manuscript_selected %||% list()
+  base_size <- as.numeric(ms_fig_cfg$base_font_size %||% 15)
+  caption_size <- as.numeric(ms_fig_cfg$caption_size %||% 11)
+
+  ggplot2::theme_bw(base_size = base_size) +
     ggplot2::theme(
       panel.grid = ggplot2::element_blank(),
       legend.position = "bottom",
       plot.title = ggplot2::element_text(face = "bold", hjust = 0.5),
       plot.subtitle = ggplot2::element_text(hjust = 0.5),
-      plot.caption = ggplot2::element_text(size = 9, colour = "grey35", hjust = 0)
+      plot.caption = ggplot2::element_text(
+        size = caption_size, colour = "grey35", hjust = 0
+      )
     )
 }
 
@@ -690,13 +754,18 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 }
 
 .condition_hist_df <- dplyr::bind_rows(
-  dplyr::transmute(dat, condition = "No-AI",
-                   score_percent = .data[[.noai_percent_col]]),
-  dplyr::transmute(dat, condition = "AI-assisted",
-                   score_percent = .data[[.ai_percent_col]])
+  dplyr::transmute(dat,
+    condition = .ctl_display,
+    score_percent = .data[[.noai_percent_col]]
+  ),
+  dplyr::transmute(dat,
+    condition = .int_display,
+    score_percent = .data[[.ai_percent_col]]
+  )
 ) |>
   dplyr::mutate(condition = factor(.data$condition,
-                                   levels = c("No-AI", "AI-assisted")))
+    levels = c(.ctl_display, .int_display)
+  ))
 
 .condition_hist_plot <- ggplot2::ggplot(
   .condition_hist_df,
@@ -740,10 +809,14 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     colour = "white",
     alpha = 0.9
   ) +
-  ggplot2::geom_vline(xintercept = 0, linetype = "dotted",
-                      colour = "grey25", linewidth = 0.8) +
-  ggplot2::geom_vline(xintercept = .mean_diff_pct, colour = "firebrick",
-                      linewidth = 0.9) +
+  ggplot2::geom_vline(
+    xintercept = 0, linetype = "dotted",
+    colour = "grey25", linewidth = 0.8
+  ) +
+  ggplot2::geom_vline(
+    xintercept = .mean_diff_pct, colour = "firebrick",
+    linewidth = 0.9
+  ) +
   ggplot2::annotate(
     "text",
     x = .mean_diff_pct,
@@ -756,7 +829,7 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   ) +
   ggplot2::scale_x_continuous(labels = .signed_number) +
   ggplot2::labs(
-    x = "AI-assisted - No-AI (percentage points)",
+    x = paste0(.int_display, " - ", .ctl_display, " (percentage points)"),
     y = "Participants",
     title = NULL,
     subtitle = NULL,
@@ -766,11 +839,18 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 
 .plot_null_distribution <- function(alternative = c("two.sided", "greater")) {
   alternative <- match.arg(alternative)
+
   perm_pp <- .perm_dist / .scale_to * 100
   obs_pp <- .obs_diff / .scale_to * 100
+
   vals <- sort(unique(round(perm_pp, 10)))
   step <- diff(vals)
-  bar_width <- if (length(step)) min(step[step > 0], na.rm = TRUE) * 0.9 else 1
+  bar_width <- if (length(step)) {
+    min(step[step > 0], na.rm = TRUE) * 0.9
+  } else {
+    1
+  }
+
   null_df <- as.data.frame(table(round(perm_pp, 10)), stringsAsFactors = FALSE)
   names(null_df) <- c("mean_difference", "n")
   null_df$mean_difference <- as.numeric(null_df$mean_difference)
@@ -779,20 +859,43 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   } else {
     null_df$mean_difference >= obs_pp - sqrt(.Machine$double.eps)
   }
-  p_value <- if (alternative == "two.sided") {
-    .perm_two_p
-  } else {
-    .p_one
-  }
+
+  p_value <- if (alternative == "two.sided") .perm_two_p else .p_one
+
+  fp_cfg <- cfg$figures$manuscript_selected$fisher_pitman %||% list()
+  obs_nudge <- as.numeric(fp_cfg$observed_label_nudge_pp %||% 0.35)
+  obs_y_fraction <- as.numeric(fp_cfg$observed_label_y_fraction %||% 0.94)
+  obs_label_size <- as.numeric(fp_cfg$observed_label_size %||% 3.7)
+  obs_fill <- as.character(fp_cfg$observed_label_fill %||% "white")[1]
+  obs_fill_alpha <- as.numeric(fp_cfg$observed_label_fill_alpha %||% 0.90)
+  null_fill <- as.character(fp_cfg$null_fill %||% "grey75")[1]
+  extreme_fill <- as.character(fp_cfg$extreme_fill %||% "firebrick")[1]
+  observed_color <- as.character(fp_cfg$observed_color %||% "#2E8B57")[1]
+  reflected_color <- as.character(
+    fp_cfg$reflected_threshold_color %||% "firebrick"
+  )[1]
+  p_value_color <- as.character(fp_cfg$p_value_color %||% "firebrick")[1]
+  p_size <- as.numeric(fp_cfg$p_value_size %||% 4.0)
+
+  ymax <- max(null_df$n, na.rm = TRUE)
+  obs_x <- obs_pp + ifelse(obs_pp >= 0, obs_nudge, -obs_nudge)
+  obs_hjust <- ifelse(obs_pp >= 0, 0, 1)
+  obs_y <- ymax * obs_y_fraction
+
   p <- ggplot2::ggplot(
     null_df,
     ggplot2::aes(x = .data$mean_difference, y = .data$n, fill = .data$extreme)
   ) +
     ggplot2::geom_col(width = bar_width, colour = "white", linewidth = 0.15) +
-    ggplot2::scale_fill_manual(values = c("FALSE" = "grey75", "TRUE" = "firebrick"),
-                               guide = "none") +
-    ggplot2::geom_vline(xintercept = obs_pp, colour = "#2E8B57",
-                        linewidth = 0.9) +
+    ggplot2::scale_fill_manual(
+      values = c("FALSE" = null_fill, "TRUE" = extreme_fill),
+      guide = "none"
+    ) +
+    ggplot2::geom_vline(
+      xintercept = obs_pp,
+      colour = observed_color,
+      linewidth = 0.9
+    ) +
     ggplot2::annotate(
       "text",
       x = Inf,
@@ -800,22 +903,28 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
       label = paste0("p = ", .fmt_p(p_value)),
       hjust = 1.08,
       vjust = 1.35,
-      colour = "firebrick",
-      size = 4
+      colour = p_value_color,
+      size = p_size
     ) +
     ggplot2::annotate(
-      "text",
-      x = obs_pp,
-      y = Inf,
+      "label",
+      x = obs_x,
+      y = obs_y,
       label = paste0("Observed = ", .signed_pp(obs_pp, accuracy = 0.01)),
-      hjust = ifelse(obs_pp >= 0, 1.05, -0.05),
-      vjust = 2.6,
-      colour = "#2E8B57",
-      size = 3.4
+      hjust = obs_hjust,
+      vjust = 0.5,
+      colour = observed_color,
+      fill = scales::alpha(obs_fill, obs_fill_alpha),
+      label.size = 0,
+      label.padding = grid::unit(0.10, "lines"),
+      size = obs_label_size
     ) +
     ggplot2::scale_x_continuous(labels = .signed_number) +
     ggplot2::labs(
-      x = "Null mean difference (AI-assisted - No-AI, percentage points)",
+      x = paste0(
+        "Null mean difference (", .int_display, " - ", .ctl_display,
+        ", percentage points)"
+      ),
       y = "Null distribution count",
       title = NULL,
       subtitle = NULL,
@@ -824,9 +933,14 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     .reference_theme()
 
   if (alternative == "two.sided") {
-    p <- p + ggplot2::geom_vline(xintercept = -obs_pp, colour = "firebrick",
-                                 linetype = "dotted", linewidth = 0.8)
+    p <- p + ggplot2::geom_vline(
+      xintercept = -obs_pp,
+      colour = reflected_color,
+      linetype = "dotted",
+      linewidth = 0.8
+    )
   }
+
   p
 }
 
@@ -848,11 +962,13 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   ) |>
   dplyr::mutate(
     condition = dplyr::if_else(.data$condition_code == "ai",
-                               "AI-assisted", "No-AI"),
+      .int_display, .ctl_display
+    ),
     x_pos = dplyr::if_else(.data$condition_code == "ai", 2, 1),
     condition_period = dplyr::if_else(.data$condition_code == "ai",
-                                      .data$intervention_period,
-                                      .data$control_period),
+      .data$intervention_period,
+      .data$control_period
+    ),
     test = dplyr::case_when(
       .data$condition_period == .data$form_x_period ~ "X",
       .data$condition_period == .data$form_y_period ~ "Y",
@@ -873,9 +989,11 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     ci_high = .data$mean + stats::qt(0.975, df = nrow(dat) - 1) * .data$se
   )
 .slope_ylim <- score_zoom_limits_percent(.slope_df$score)
-.slope_noai_mean <- .slope_means$mean[.slope_means$condition == "No-AI"][1]
-.slope_diff_ci <- as.numeric(c(.paired[["95% CI low"]][1],
-                               .paired[["95% CI high"]][1])) / .scale_to * 100
+.slope_noai_mean <- .slope_means$mean[.slope_means$condition == .ctl_display][1]
+.slope_diff_ci <- as.numeric(c(
+  .paired[["95% CI low"]][1],
+  .paired[["95% CI high"]][1]
+)) / .scale_to * 100
 .slope_wedge <- data.frame(
   x_pos = c(1, 2, 2),
   score = c(
@@ -888,8 +1006,10 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 .slope_labels_right <- dplyr::filter(.slope_df, .data$x_pos == 2)
 
 .slope_plot <- ggplot2::ggplot(.slope_df, ggplot2::aes(x = .data$x_pos, y = .data$score)) +
-  ggplot2::geom_hline(yintercept = .slope_noai_mean, linetype = "dotted",
-                      colour = "grey45", linewidth = 0.5) +
+  ggplot2::geom_hline(
+    yintercept = .slope_noai_mean, linetype = "dotted",
+    colour = "grey45", linewidth = 0.5
+  ) +
   ggplot2::geom_polygon(
     data = .slope_wedge,
     ggplot2::aes(x = .data$x_pos, y = .data$score),
@@ -909,7 +1029,7 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     direction = "y",
     xlim = c(0.76, 0.88),
     hjust = 1,
-    size = 2.9,
+    size = as.numeric((cfg$figures$paired_score_plot %||% list())$endpoint_label_size %||% 3.6),
     fontface = "bold",
     alpha = 0.75,
     box.padding = 0.12,
@@ -931,7 +1051,7 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     direction = "y",
     xlim = c(2.12, 2.24),
     hjust = 0,
-    size = 2.9,
+    size = as.numeric((cfg$figures$paired_score_plot %||% list())$endpoint_label_size %||% 3.6),
     fontface = "bold",
     alpha = 0.75,
     box.padding = 0.12,
@@ -960,11 +1080,13 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     colour = "black",
     size = 2
   ) +
-  ggplot2::scale_colour_manual(values = .seq_colors,
-                               name = "Randomized sequence") +
+  ggplot2::scale_colour_manual(
+    values = .seq_colors,
+    name = "Randomized sequence"
+  ) +
   ggplot2::scale_x_continuous(
     breaks = c(1, 2),
-    labels = c("No-AI", "AI-assisted")
+    labels = c(.ctl_display, .int_display)
   ) +
   ggplot2::scale_y_continuous(
     "Score (%)",
@@ -972,8 +1094,10 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
     labels = function(y) paste0(y, "%"),
     expand = ggplot2::expansion(mult = c(0.03, 0.08))
   ) +
-  ggplot2::coord_cartesian(xlim = c(0.72, 2.28), ylim = .slope_ylim,
-                           clip = "off") +
+  ggplot2::coord_cartesian(
+    xlim = c(0.72, 2.28), ylim = .slope_ylim,
+    clip = "off"
+  ) +
   ggplot2::labs(
     x = NULL,
     title = NULL,
@@ -986,12 +1110,26 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
   if (!requireNamespace("patchwork", quietly = TRUE)) {
     stop("The patchwork package is required to build Figure S4.")
   }
+
+  .fp_cfg <- cfg$figures$manuscript_selected$fisher_pitman %||% list()
+  .fp_title_size <- as.numeric(.fp_cfg$panel_title_size %||% 15)
+
   .p_two <- .plot_null_distribution("two.sided") +
     ggplot2::labs(title = "Two-sided") +
-    ggplot2::theme(plot.title = ggplot2::element_text(face = "bold", hjust = 0))
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(
+        face = "bold", hjust = 0, size = .fp_title_size
+      )
+    )
+
   .plot_one <- .plot_null_distribution("greater") +
     ggplot2::labs(title = "Exploratory one-sided") +
-    ggplot2::theme(plot.title = ggplot2::element_text(face = "bold", hjust = 0))
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(
+        face = "bold", hjust = 0, size = .fp_title_size
+      )
+    )
+
   patchwork::wrap_plots(.p_two, .plot_one, ncol = 1)
 }
 
@@ -999,20 +1137,14 @@ if (is.null(.paired) || is.null(.sign) || is.null(.log_tbl)) {
 # Main body.
 # ---------------------------------------------------------------------------
 .item_fig_source <- "figures/exploratory/item_endorsement_by_sequence.png"
-.item_fig_main_rel <- "figures/main/item_endorsement_by_sequence.png"
-.item_fig_main_path <- file.path(.out_root, .item_fig_main_rel)
-.item_fig_exploratory_path <- file.path(.out_root, .item_fig_source)
-if (file.exists(.item_fig_exploratory_path)) {
-  dir.create(dirname(.item_fig_main_path), recursive = TRUE, showWarnings = FALSE)
-  file.copy(.item_fig_exploratory_path, .item_fig_main_path, overwrite = TRUE)
-  .item_fig_source <- .item_fig_main_rel
-}
 
 .copy_selected(
   "figures/primary/ai_assisted_vs_noai_paired.png",
   "main_body/figures/figure1_paired_score_plot.png",
-  paste0("Participant-level paired ", .score_metric_short,
-         "s under No-AI and AI-assisted study; the wedge shows uncertainty in the mean paired difference."),
+  paste0(
+    "Participant-level paired ", .score_metric_short,
+    "s under No-AI and AI-assisted study; the wedge shows uncertainty in the mean paired difference."
+  ),
   "Main", "Figure 1"
 )
 .write_selected_table(
@@ -1020,20 +1152,24 @@ if (file.exists(.item_fig_exploratory_path)) {
   "main_body/tables/table1a_score_descriptive_summary.csv",
   "main_body/tables/table1a_score_descriptive_summary.png",
   NULL,
-  paste0("Descriptive summary of restricted ", .score_metric_short,
-         "s by study condition."),
+  paste0(
+    "Descriptive summary of restricted ", .score_metric_short,
+    "s by study condition."
+  ),
   "Main", "Table 1A",
-  "rds/analysis_results.rds"
+  "extra/analysis_objects/analysis_results.rds"
 )
 .write_selected_table(
   .main_table1b,
   "main_body/tables/table1b_primary_paired_contrast.csv",
   "main_body/tables/table1b_primary_paired_contrast.png",
   NULL,
-  paste0("AI-assisted minus No-AI paired contrast on the ",
-         .score_metric_short, " metric."),
+  paste0(
+    "AI-assisted minus No-AI paired contrast on the ",
+    .score_metric_short, " metric."
+  ),
   "Main", "Table 1B",
-  "rds/analysis_results.rds"
+  "extra/analysis_objects/analysis_results.rds"
 )
 .copy_selected(
   "figures/supplementary/post_hoc_power_curve.png",
@@ -1054,19 +1190,24 @@ if (file.exists(.item_fig_exploratory_path)) {
   "Main Table 2. Item-level logistic mixed-model summary",
   "Manuscript-facing GLMM summary using odds ratios and OR-scale 95% CIs only.",
   "Main", "Table 2",
-  "rds/analysis_results.rds"
+  "extra/analysis_objects/analysis_results.rds"
 )
 
 # ---------------------------------------------------------------------------
 # Supplement.
 # ---------------------------------------------------------------------------
-.generate_flow_selected <- isTRUE(cfg$flow_diagram$generate %||% FALSE)
+.flow_selected_source_rel <- "figures/supplementary/figure_s1_participant_flow.png"
+.flow_selected_source <- .resolve_output_source(.flow_selected_source_rel)
+.generate_flow_selected <- isTRUE(cfg$flow_diagram$generate %||% FALSE) ||
+  file.exists(.flow_selected_source)
+
 if (.generate_flow_selected) {
   .copy_selected(
-    "figures/supplementary/figure_s1_participant_flow.png",
+    .flow_selected_source_rel,
     "supplement/figures/figure_s1_participant_flow.png",
     "Participant allocation and 2 x 2 crossover counterbalancing schematic.",
-    "Supplement", "Figure S1"
+    "Supplement", "Figure S1",
+    required = isTRUE(cfg$flow_diagram$generate %||% FALSE)
   )
 }
 .write_selected_table(
@@ -1076,32 +1217,38 @@ if (.generate_flow_selected) {
   "Table S1. Post hoc paired-sample power analysis by target effect size",
   "Post hoc paired-sample power analysis by target effect size.",
   "Supplement", "Table S1",
-  "tables/supplementary/20_post_hoc_power_analysis.csv"
+  "extra/analysis_objects/analysis_results.rds"
 )
+
+.ms_fig_cfg <- cfg$figures$manuscript_selected %||% list()
+.fp_export_cfg <- .ms_fig_cfg$fisher_pitman %||% list()
 
 .save_selected_plot(
   .condition_hist_plot,
   "supplement/figures/figure_s2_score_distributions_by_condition.png",
   "Restricted score distributions by study condition.",
   "Supplement", "Figure S2",
-  source_rel = "rds/analysis_results.rds",
-  width = 6.5, height = 4.5
+  source_rel = "extra/analysis_objects/analysis_results.rds",
+  width = as.numeric(.ms_fig_cfg$condition_hist_width_in %||% 6.5),
+  height = as.numeric(.ms_fig_cfg$condition_hist_height_in %||% 4.5)
 )
 .save_selected_plot(
   .paired_diff_plot,
   "supplement/figures/figure_s3_paired_condition_difference_distribution.png",
   "Participant-level paired-condition-difference distribution.",
   "Supplement", "Figure S3",
-  source_rel = "rds/analysis_results.rds",
-  width = 6.5, height = 4.5
+  source_rel = "extra/analysis_objects/analysis_results.rds",
+  width = as.numeric(.ms_fig_cfg$paired_difference_width_in %||% 6.5),
+  height = as.numeric(.ms_fig_cfg$paired_difference_height_in %||% 4.5)
 )
 .save_selected_plot(
   .perm_null_composite,
   "supplement/figures/figure_s4_fisher_pitman_null_distributions.png",
   "Two-sided and exploratory one-sided Fisher-Pitman permutation null distributions.",
   "Supplement", "Figure S4",
-  source_rel = "rds/analysis_results.rds",
-  width = 7.5, height = 7.5
+  source_rel = "extra/analysis_objects/analysis_results.rds",
+  width = as.numeric(.fp_export_cfg$width_in %||% 7.5),
+  height = as.numeric(.fp_export_cfg$height_in %||% 7.2)
 )
 
 .write_selected_table(
@@ -1111,7 +1258,7 @@ if (.generate_flow_selected) {
   "Table S2. Exact sign and Fisher-Pitman permutation tests",
   "Exact sign test plus two-sided and exploratory one-sided Fisher-Pitman permutation tests.",
   "Supplement", "Table S2",
-  "rds/analysis_results.rds"
+  "extra/analysis_objects/analysis_results.rds"
 )
 .write_selected_table(
   .supp_glmm_log_odds_tbl,
@@ -1120,28 +1267,34 @@ if (.generate_flow_selected) {
   "Table S3. Detailed logistic mixed-model coefficients on the log-odds scale",
   "Detailed GLMM coefficients on the log-odds scale; the null value is 0.",
   "Supplement", "Table S3",
-  "rds/analysis_results.rds"
+  "extra/analysis_objects/analysis_results.rds"
 )
 .write_selected_table(
   .sequence_desc_tbl,
   "supplement/tables/table_s4_randomized_sequence_paired_differences.csv",
   "supplement/tables/table_s4_randomized_sequence_paired_differences.png",
   "Table S4. Randomized-sequence-specific paired condition differences",
-  paste0("Randomized-sequence-specific paired condition differences on the ",
-         .score_metric_short, " metric, with mean and SD combined for compact display."),
+  paste0(
+    "Randomized-sequence-specific paired condition differences on the ",
+    .score_metric_short, " metric, with mean and SD combined for compact display."
+  ),
   "Supplement", "Table S4",
-  "rds/analysis_results.rds"
+  "extra/analysis_objects/analysis_results.rds"
 )
 .write_selected_table(
   .supp_desc_tbl,
   "supplement/tables/table_s5_descriptive_scores.csv",
   "supplement/tables/table_s5_descriptive_scores.png",
-  paste0("Table S5. Supplemental descriptive score summary on the ",
-         .score_metric_short, " metric"),
-  paste0("Supplemental descriptive score summary on the ",
-         .score_metric_short, " metric with compact headers."),
+  paste0(
+    "Table S5. Supplemental descriptive score summary on the ",
+    .score_metric_short, " metric"
+  ),
+  paste0(
+    "Supplemental descriptive score summary on the ",
+    .score_metric_short, " metric with compact headers."
+  ),
   "Supplement", "Table S5",
-  "rds/analysis_results.rds"
+  "extra/analysis_objects/analysis_results.rds"
 )
 
 # ---------------------------------------------------------------------------
@@ -1152,14 +1305,17 @@ if (.generate_flow_selected) {
 
 .section_lines <- function(role_name, title) {
   rows <- .manifest[.manifest$role == role_name, , drop = FALSE]
-  if (!nrow(rows)) return(c(paste0("## ", title), "", "- None.", ""))
+  if (!nrow(rows)) {
+    return(c(paste0("## ", title), "", "- None.", ""))
+  }
   out <- c(paste0("## ", title), "")
   for (i in seq_len(nrow(rows))) {
+    source_label <- if (.reviewer_mode) "Build source" else "Source"
     out <- c(
       out,
       paste0("- `", rows$final_filename[i], "`"),
       paste0("  - Label: ", rows$label[i]),
-      paste0("  - Source: `", rows$source_path[i], "`"),
+      paste0("  - ", source_label, ": `", rows$source_path[i], "`"),
       paste0("  - Description: ", rows$description[i]),
       paste0("  - Role: ", rows$role[i]),
       ""
@@ -1168,59 +1324,95 @@ if (.generate_flow_selected) {
   out
 }
 
-.readme_lines <- c(
-  "# Manuscript Assembly Folder",
-  "",
-  "Selected outputs copied or regenerated from canonical pipeline outputs. Original outputs remain in their original folders.",
-  "",
-  "## Folder Layout",
-  "",
-  "- `main_body/figures/`",
-  "- `main_body/tables/`",
-  "- `supplement/figures/`",
-  "- `supplement/tables/`",
-  "",
-  .section_lines("Main", "Main manuscript candidates"),
-  .section_lines("Supplement", "Supplementary manuscript candidates"),
+.repro_notes <- c(
   "## Reproducibility notes",
   "",
   "- Visible labels use AI-assisted/No-AI terminology where appropriate.",
-  paste0("- Power calculations use the configured target of ",
-         .power$target_power_label, "."),
+  paste0(
+    "- Power calculations use the configured target of ",
+    .power$target_power_label, "."
+  ),
   "- The period GLMM is labeled as a period/test-order model, not an AI-first/AI-second model.",
   "- Restricted scoring follows the configured item exclusions for this run.",
-  paste0("- Form X has ", score_meta$restricted_item_counts$x,
-         " included items and restricted Form Y has ",
-         score_meta$restricted_item_counts$y, " included items."),
+  paste0(
+    "- Form X has ", score_meta$restricted_item_counts$x,
+    " included items and restricted Form Y has ",
+    score_meta$restricted_item_counts$y, " included items."
+  ),
   paste0("- Scores use the ", .score_metric_short, " metric."),
   "- Numeric values reflect this run's configured exclusions and common-scale rescaling.",
-  "",
-  "## Files intentionally not selected",
-  "",
-  "- `figures/primary/score_delta_dotplot.png` - alternate paired-effect visualization.",
-  "- `figures/primary/effect_size_forest.png` - alternate effect-size figure.",
-  "- `figures/primary/intervention_effect_by_sequence.png` - alternate sequence-stratified figure.",
-  "- `tables/primary/00_main_results.csv` - compact primary table alias.",
-  "- `tables/primary/00_overall_results.csv` - compact primary table.",
-  "- `tables_png/primary/00_overall_results.png` - PNG of compact primary table.",
-  "- `tables/primary/03_primary_contrasts.csv` - broader contrast table retained in canonical outputs.",
-  "- `figures/supplementary/post_hoc_power_curve.png` - selected as main Figure 2, not duplicated in the supplement.",
-  "- `tables/exploratory/19_item_endorsement_rates.csv` - retained in canonical outputs; the manuscript-selected item endorsement output is main Figure 3.",
-  "",
-  "## Label Check",
-  "",
-  "The selected item endorsement figure uses `No-AI first` and `AI-assisted first`. If a screenshot shows legacy sequence labels, it is stale relative to these regenerated files.",
-  "",
-  "## Validation",
-  "",
-  "Every file listed above is checked in `manifest_validation.csv`."
+  ""
 )
+
+if (.reviewer_mode) {
+  .readme_lines <- c(
+    "# Reviewer Manuscript Outputs",
+    "",
+    "This folder contains only the numbered main-body and supplementary outputs reproduced from the bundled deidentified data and study configuration.",
+    "",
+    "## Folder Layout",
+    "",
+    "- `main_body/figures/`",
+    "- `main_body/tables/`",
+    "- `supplement/figures/`",
+    "- `supplement/tables/`",
+    "",
+    .section_lines("Main", "Main manuscript outputs"),
+    .section_lines("Supplement", "Supplementary manuscript outputs"),
+    .repro_notes,
+    "## Reviewer bundle scope",
+    "",
+    "- Build-source paths listed above refer to temporary analysis artifacts created during reproduction.",
+    "- Those temporary analysis objects and non-selected figures are intentionally omitted from the final reviewer-facing output directory.",
+    "- The bundled `reference_outputs/manuscript_selected/` directory provides the validated reference result set used by the automated reviewer validation step.",
+    "",
+    "## Validation",
+    "",
+    "Every required file listed above is checked in `manifest_validation.csv`; the reviewer launcher also compares reproduced table values and the expected PNG file set against the bundled reference outputs."
+  )
+} else {
+  .readme_lines <- c(
+    "# Manuscript Assembly Folder",
+    "",
+    "Selected outputs are the authoritative numbered manuscript set. Non-selected analytical outputs remain under ../extra/.",
+    "",
+    "## Folder Layout",
+    "",
+    "- `main_body/figures/`",
+    "- `main_body/tables/`",
+    "- `supplement/figures/`",
+    "- `supplement/tables/`",
+    "",
+    .section_lines("Main", "Main manuscript candidates"),
+    .section_lines("Supplement", "Supplementary manuscript candidates"),
+    .repro_notes,
+    "## Files intentionally not selected",
+    "",
+    "- `../extra/figures/score_distributions/score_delta_dotplot.png` - alternate paired-effect visualization.",
+    "- `../extra/figures/condition_effects/effect_size_forest.png` - alternate effect-size figure.",
+    "- `../extra/figures/sequence_and_period/intervention_effect_by_sequence.png` - alternate sequence-stratified figure.",
+    "- `../extra/tables/condition_effects/00_main_results.csv` - compact condition-effect table alias.",
+    "- `../extra/tables/condition_effects/00_overall_results.csv` - compact condition-effect table.",
+    "- `../extra/tables/condition_effects/00_overall_results.png` - PNG of compact condition-effect table.",
+    "- `../extra/tables/condition_effects/03_primary_contrasts.csv` - broader condition-contrast table.",
+    "- The source power-curve files are removed from `../extra/` after promotion to main Figure 2.",
+    "- `../extra/tables/item_level/19_item_endorsement_rates.csv` - item-level numeric detail supporting main Figure 3.",
+    "",
+    "## Label Check",
+    "",
+    "The selected item endorsement figure uses `No-AI first` and `AI-assisted first`. If a screenshot shows legacy sequence labels, it is stale relative to these regenerated files.",
+    "",
+    "## Validation",
+    "",
+    "Every file listed above is checked in `manifest_validation.csv`."
+  )
+}
 writeLines(.readme_lines, file.path(.sel_root, "README.md"), useBytes = TRUE)
 
 .manifest <- rbind(
   .manifest,
   data.frame(
-    role = "Audit",
+    role = "Metadata",
     label = "README",
     final_filename = "README.md",
     source_path = "R/10_manuscript_selected.R",
@@ -1232,22 +1424,27 @@ writeLines(.readme_lines, file.path(.sel_root, "README.md"), useBytes = TRUE)
 )
 .manifest$present <- file.exists(file.path(.sel_root, .manifest$final_filename))
 utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
-                 row.names = FALSE)
+  row.names = FALSE
+)
 
 .validate_public_selected_labels <- function(root) {
-  all_files <- list.files(root, recursive = TRUE, all.files = TRUE,
-                          full.names = TRUE, no.. = TRUE)
+  all_files <- list.files(root,
+    recursive = TRUE, all.files = TRUE,
+    full.names = TRUE, no.. = TRUE
+  )
   rel_files <- gsub("\\\\", "/", substring(all_files, nchar(root) + 2L))
 
   path_hits <- rel_files[grepl(.disallowed_path_regex, rel_files,
-                               ignore.case = TRUE)]
+    ignore.case = TRUE
+  )]
 
   text_ext <- c("csv", "md", "txt", "tsv", "json", "yml", "yaml")
   text_files <- all_files[tolower(tools::file_ext(all_files)) %in% text_ext]
   text_hits <- character()
   for (f in text_files) {
     lines <- tryCatch(readLines(f, warn = FALSE, encoding = "UTF-8"),
-                      error = function(e) character())
+      error = function(e) character()
+    )
     hit_idx <- grep(.disallowed_text_regex, lines, ignore.case = TRUE)
     if (length(hit_idx) > 0) {
       rel <- gsub("\\\\", "/", substring(f, nchar(root) + 2L))
@@ -1284,7 +1481,8 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
 
   for (section in expected_top_dirs) {
     section_dirs <- sort(basename(list.dirs(
-      file.path(root, section), recursive = FALSE, full.names = TRUE
+      file.path(root, section),
+      recursive = FALSE, full.names = TRUE
     )))
     if (!identical(section_dirs, c("figures", "tables"))) {
       stop(
@@ -1296,7 +1494,8 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
   main_figs <- sort(gsub(
     "\\\\", "/",
     list.files(file.path(root, "main_body", "figures"),
-               pattern = "\\.png$", full.names = FALSE)
+      pattern = "\\.png$", full.names = FALSE
+    )
   ))
   expected_main_figs <- c(
     "figure1_paired_score_plot.png",
@@ -1314,7 +1513,8 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
   supp_figs <- sort(gsub(
     "\\\\", "/",
     list.files(file.path(root, "supplement", "figures"),
-               pattern = "\\.png$", full.names = FALSE)
+      pattern = "\\.png$", full.names = FALSE
+    )
   ))
   expected_supp_figs <- c(
     if (.generate_flow_selected) "figure_s1_participant_flow.png",
@@ -1333,7 +1533,8 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
   supp_csv <- sort(gsub(
     "\\\\", "/",
     list.files(file.path(root, "supplement", "tables"),
-               pattern = "\\.csv$", full.names = FALSE)
+      pattern = "\\.csv$", full.names = FALSE
+    )
   ))
   expected_supp_csv <- c(
     "table_s1_post_hoc_power_analysis.csv",
@@ -1353,7 +1554,8 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
   supp_png <- sort(gsub(
     "\\\\", "/",
     list.files(file.path(root, "supplement", "tables"),
-               pattern = "\\.png$", full.names = FALSE)
+      pattern = "\\.png$", full.names = FALSE
+    )
   ))
   expected_supp_png <- sub("\\.csv$", ".png", expected_supp_csv)
   if (!identical(supp_png, expected_supp_png)) {
@@ -1378,11 +1580,12 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
     full.names = TRUE
   )
   text_files <- text_files[tolower(tools::file_ext(text_files)) %in%
-                             c("csv", "md", "txt", "tsv", "json", "yml", "yaml")]
+    c("csv", "md", "txt", "tsv", "json", "yml", "yaml")]
   stale_hits <- character()
   for (f in text_files) {
     lines <- tryCatch(readLines(f, warn = FALSE, encoding = "UTF-8"),
-                      error = function(e) character())
+      error = function(e) character()
+    )
     for (term in stale_terms) {
       hit_idx <- grep(term, lines, ignore.case = FALSE, fixed = TRUE)
       if (length(hit_idx) > 0) {
@@ -1412,8 +1615,10 @@ utils::write.csv(.manifest, file.path(.sel_root, "manifest_validation.csv"),
 log_line("Manuscript selected folder: ", normalizePath(.sel_root, winslash = "/"))
 log_line("Present manuscript-selected files: ", nrow(.present))
 if (nrow(.missing) > 0) {
-  log_warn("Missing required manuscript-selected files: ",
-           paste(.missing$final_filename, collapse = ", "))
+  log_warn(
+    "Missing required manuscript-selected files: ",
+    paste(.missing$final_filename, collapse = ", ")
+  )
   stop("Manuscript-selected validation failed; see manifest_validation.csv")
 }
 
@@ -1421,7 +1626,9 @@ cat("\nMANUSCRIPT_SELECTED VALIDATION\n")
 cat("Present files:\n")
 for (i in seq_len(nrow(.present))) {
   cat("  OK  ", .present$final_filename[i],
-      "  <-  ", .present$source_path[i], "\n", sep = "")
+    "  <-  ", .present$source_path[i], "\n",
+    sep = ""
+  )
 }
 cat("Missing files: none\n")
 
@@ -1431,9 +1638,32 @@ log_line("Power table : manuscript_selected/supplement/tables/table_s1_post_hoc_
 log_line("Power PNG   : manuscript_selected/supplement/tables/table_s1_post_hoc_power_analysis.png")
 log_line("Power curve : manuscript_selected/main_body/figures/figure2_power_curve.png")
 
+# manuscript_selected is the sole publication-role layer. Remove the exact source
+# figures that were promoted into the manuscript so extra/ contains only material
+# that was not selected for the manuscript.
+.selected_source_specs <- list(
+  c("figures", "primary", "ai_assisted_vs_noai_paired.png"),
+  c("figures", "supplementary", "post_hoc_power_curve.png"),
+  c("figures", "supplementary", "post_hoc_power_curve.pdf"),
+  c("figures", "exploratory", "item_endorsement_by_sequence.png"),
+  c("figures", "supplementary", "figure_s1_participant_flow.png")
+)
+for (.spec in .selected_source_specs) {
+  .src <- do.call(out_path, as.list(.spec))
+  if (file.exists(.src)) unlink(.src, force = TRUE)
+}
+
+# Remove empty semantic figure directories left after promotion.
+.extra_fig_root <- file.path(.out_root, "extra", "figures")
+if (dir.exists(.extra_fig_root)) {
+  .dirs_desc <- rev(list.dirs(.extra_fig_root, recursive = TRUE, full.names = TRUE))
+  for (.d in .dirs_desc) {
+    if (length(list.files(.d, all.files = TRUE, no.. = TRUE)) == 0L) {
+      unlink(.d, recursive = TRUE, force = TRUE)
+    }
+  }
+}
+
 if (exists("session_record_module", envir = .GlobalEnv)) {
   session_record_module("manuscript_selected", "OK", 0)
 }
-
-
-

@@ -1,44 +1,40 @@
 # =============================================================================
 # study_config.yml
-# Configuration for the Crossover Within-Subject Study Analysis Pipeline
-# =============================================================================
-# Copy this file and rename it for each study, or edit values directly.
-# This file is read at runtime; you do not need to re-run anything to edit it.
+# Study meaning, input schema, scoring, analysis choices, and manuscript wording.
+# Visual styling lives in config/visual_config.yml.
 # =============================================================================
 
 study:
-  # Identifier used to name the outputs/ subfolder
   name: "my_study"
-
-  # Human-readable labels for your two conditions
-  # These appear on figure axes and table row labels
   intervention_label: "Intervention"
   control_label: "Control"
-
-  # Human-readable labels for your two test forms
   form_x_label: "Form X"
   form_y_label: "Form Y"
 
 # -----------------------------------------------------------------------------
-# Column name mapping
-# Tells the pipeline which column headers to use in your CSVs.
-# The pipeline will also accept the defaults listed here with any capitalisation.
+# Input column mapping
 # -----------------------------------------------------------------------------
 columns:
-  # assignment.csv column names
-  participant_id: "Participant_ID"      # also accepts: Participant, participant, ID
-  intervention_order: "Intervention_Order"  # also accepts: AI_Order (legacy)
+  participant_id: "Participant_ID"
+  intervention_order: "Intervention_Order"
+  control_order: "Control_Order"
   form_x_order: "X_Order"
   form_y_order: "Y_Order"
-  # Optional time column in posttest CSVs (set to null to disable)
   time_taken: "Time_taken"
 
 # -----------------------------------------------------------------------------
+# Privacy / deidentification
+# The pipeline automatically recognizes obvious direct identifiers such as
+# email, names, student IDs, MRNs, DOB, phone numbers, and addresses.
+# Add study-specific identifier column names here if needed.
+# participant_id is assumed to be a study code unless its configured column name
+# is itself an obvious direct identifier (for example student_id).
+# -----------------------------------------------------------------------------
+privacy:
+  additional_direct_identifier_columns: []
+
+# -----------------------------------------------------------------------------
 # Item exclusions
-# List item names (lowercase) to exclude from scoring.
-# Format: "x1", "x3", "y1", "y6" etc.
-# Leave empty [] to include all items.
-# These appear in a separate "restricted" scoring column alongside the full score.
 # -----------------------------------------------------------------------------
 item_exclusions:
   x: []
@@ -48,22 +44,17 @@ item_exclusions:
 # Scoring
 # -----------------------------------------------------------------------------
 scores:
-  # Participant-level scores are computed as correct_included / n_items_included,
-  # then rescaled to this maximum. Use 10 for a rescaled 0-10 score.
   scale_to: 10
 
 # -----------------------------------------------------------------------------
 # Analysis settings
 # -----------------------------------------------------------------------------
 analysis:
-  alpha: 0.05           # Significance level
-  ci_level: 0.95        # Confidence interval coverage
-  # Minimum n per sequence group to run carryover test (Grizzle method)
+  alpha: 0.05
+  ci_level: 0.95
   min_n_carryover: 4
-  # Ceiling and floor thresholds used in figures and Table 14.
-  # Set to null to auto-compute as 95% / 5% of scores.scale_to.
-  ceiling_threshold: null   # e.g. 9.5 for a 0-10 scale
-  floor_threshold: null     # e.g. 0.5 for a 0-10 scale
+  ceiling_threshold: null
+  floor_threshold: null
 
 # -----------------------------------------------------------------------------
 # Post-hoc paired-test power/sample-size analysis
@@ -72,27 +63,6 @@ power_analysis:
   target_power: 0.80
   target_effects_pct: [5, 8, 10, 12, 15, 20]
   max_n: null
-
-# -----------------------------------------------------------------------------
-# Publication-ready output assembly
-# The listed IDs are copied into obvious main_figures/ and main_tables/ folders.
-# Remove an ID to omit it, or use an output-relative source path for a custom
-# main item. All remaining canonical outputs are copied into supplementary_*
-# folders by default.
-# -----------------------------------------------------------------------------
-publication_outputs:
-  enabled: true
-  folder_name: "publication_outputs"
-  main_figures:
-    - "paired_score_plot"
-    - "power_curve"
-    - "item_endorsement_by_sequence"
-  main_tables:
-    - "score_descriptive_summary"
-    - "primary_paired_contrast"
-    - "supporting_analysis_summary"
-  include_supplementary_figures: true
-  include_supplementary_tables: true
 
 # -----------------------------------------------------------------------------
 # Display-only labels. These do not change analysis coding.
@@ -108,69 +78,20 @@ display_labels:
   sequence_ai_first: "AI-assisted first"
 
 # -----------------------------------------------------------------------------
-# Figure settings
-# No titles are placed on figures; captions are limited to embedded figure notes.
-# Labels, tick marks, and legends are controlled here.
+# Study-specific figure wording only.
+# Typography, colors, dimensions, spacing, and table layout are configured in
+# config/visual_config.yml.
 # -----------------------------------------------------------------------------
 figures:
-  dpi: 300
-  width_in: 7.5         # Default figure width (inches)
-  height_in: 5.0        # Default figure height (inches)
-  include_titles: false
-  base_font_size: 12
-  font_family: "sans"   # "sans", "serif", or specific font name
-
-  # Condition colors
-  color_intervention: "#2E8B57"   # Sea green
-  color_control:      "#CD853F"   # Peru / warm tan
-  color_period1:      "#4682B4"   # Steel blue
-  color_period2:      "#B22222"   # Firebrick
-
-  # Axis label for score axis (both forms share this)
   y_axis_score_label: "Rescaled 0-10 score"
-
-  # Form axis labels (used on x-axis when forms are compared)
   x_axis_form_label: "Test Form"
 
-  # Extra colors (sequence groups, individual forms)
-  color_seq_ab: "#2E8B57"     # AI-assisted-first sequence line color
-  color_seq_ba: "#8B4513"     # No-AI-first sequence line color
-  color_form_x: "#4682B4"     # Form X specific color (used in form comparison plots)
-  color_form_y: "#B22222"     # Form Y specific color
-
-  # Point and line aesthetics
-  point_alpha: 0.75
-  point_size:  2.2
-  line_alpha:  0.55           # Alpha for individual spaghetti lines
-  errorbar_width: 0.18        # Width of error bars
-
-  # Reference lines on score plots
-  show_ceiling_floor_lines: true   # Dashed ceiling/floor lines on score plots
-
-  # Significance annotation on plots
-  # Options: "none"  (no p-value or stars shown on figures)
-  #          "stars" (add asterisk annotation for p < .05)
-  significance_style: "none"
-
-  # Post-hoc power-curve annotation. {n} is replaced with the analyzed number
-  # of paired participants; it is never hard-coded to this study's N.
-  power_curve:
-    show_observed_sample: true
-    observed_sample_label: "Observed sample (n = {n})"
-    observed_sample_label_y: 0.07
-    export_pdf: true
-
 # -----------------------------------------------------------------------------
-# Optional crossover design schematic (Figure S1).
-# The design structure is fixed as a compact 2 x 2 counterbalancing schematic.
-# Set generate: true to export it; edit labels/style below as needed.
+# Figure S1 wording / behavior
 # -----------------------------------------------------------------------------
 flow_diagram:
   generate: true
   output_filename: "figure_s1_participant_flow.png"
-  width_in: 7.5
-  height_in: 5.0
-  dpi: 300
   setup_label: "Participants (n = {n}) were randomized to sequence before the session\nand completed the lecture + AI guidance before Block 1"
   control_sequence_label: "No-AI first"
   ai_sequence_label: "AI-assisted first"
@@ -180,185 +101,59 @@ flow_diagram:
   ai_short_label: "AI-assisted study (20 min)"
   period2_control_label: "No-AI study\n(20 min)"
   period2_ai_label: "AI-assisted study\n(20 min)"
-  show_row_labels: false
-  colors:
-    control_fill: "#FFF3E6"
-    control_border: "#D8893A"
-    control_text: "#6B3A10"
-    ai_fill: "#EAF7EF"
-    ai_border: "#2E8B57"
-    ai_text: "#174A2D"
-    posttest_fill: "#EAF3FC"
-    posttest_border: "#3A70B8"
-    posttest_text: "#17376D"
-    panel_fill: "#FAFAFA"
-    panel_border: "#D5D5D5"
-    subgroup_fill: "#FFFFFF"
-    subgroup_border: "#B8B8B8"
-    dark_text: "#242424"
-    arrow: "#AFAFAF"
-  font_sizes:
-    setup: 3.05
-    header: 2.55
-    subgroup: 2.25
-    cell: 2.65
-    posttest: 2.45
-    row_label: 1.85
 
 # -----------------------------------------------------------------------------
-# Table settings
+# Table data/export settings
 # -----------------------------------------------------------------------------
 tables:
   export_csv: true
   export_png: true
-  include_titles: false   # Keep false; add titles in manuscript
+  include_titles: false
   digits_default: 3
   digits_percent: 1
 
 # -----------------------------------------------------------------------------
-# Output directory structure
-# Figures and tables are organized into purpose subfolders.
-# -----------------------------------------------------------------------------
-output:
-  subfolder_by_type: true
-  subfolders:
-    - "descriptive"       # Flow, sequence allocation, distributions
-    - "psychometrics"     # Item analysis, reliability, IRT (summary tables)
-    - "item_analysis"     # Per-item psychometrics: suspicious items, ability strata
-    - "primary"           # Intervention effect contrasts
-    - "period_effects"    # Practice, carryover, sequence x period
-    - "mixed_models"      # Linear mixed-effects results
-    - "exploratory"       # Exploratory / hypothesis-generating analyses
-    - "supplementary"     # Per-participant, correlations, sensitivity
-
-# -----------------------------------------------------------------------------
-# Demographics module
-# Set generate: true and provide demographics.csv in your study data folder.
-# Column names below are the defaults -- change to match your CSV headers.
+# Optional demographics module
 # -----------------------------------------------------------------------------
 demographics:
-  generate: false                   # set true when you have a demographics.csv
-  file: "demographics.csv"          # filename relative to STUDY_DATA_PATH
+  generate: false
+  file: "demographics.csv"
   columns:
-    participant:    "participant"    # participant ID column in demographics.csv
-    age:            "age"            # numeric age column (leave blank to skip)
-    gender:         "gender"         # categorical gender column (leave blank to skip)
-    training_level: "training_level" # e.g. year in programme (leave blank to skip)
+    participant: "participant"
+    age: "age"
+    gender: "gender"
+    training_level: "training_level"
 
-# -----------------------------------------------------------------------------
-# SF-36 Health Survey (optional sub-module of demographics)
-# Only used when demographics.generate: true
-# -----------------------------------------------------------------------------
 sf36:
-  generate: false                   # set true when you have sf36_scores.csv
-  file: "sf36_scores.csv"           # filename relative to STUDY_DATA_PATH
-  # Override domain column -> label mapping (leave blank to use SF-36 defaults)
-  # domains:
-  #   physical_functioning: "Physical Functioning"
-  #   role_physical: "Role - Physical"
-  #   bodily_pain: "Bodily Pain"
-  #   general_health: "General Health"
-  #   vitality: "Vitality"
-  #   social_functioning: "Social Functioning"
-  #   role_emotional: "Role - Emotional"
-  #   mental_health: "Mental Health"
+  generate: false
+  file: "sf36_scores.csv"
 
 # -----------------------------------------------------------------------------
 # Optional analyses
-# Set to false to skip a section entirely.
 # -----------------------------------------------------------------------------
 optional_analyses:
-  # Analyse time_taken columns if present in the posttest CSVs
   run_time_analysis: true
-  # Run Shapiro-Wilk normality tests on scores and differences
   run_normality_tests: true
-  # Generate full-vs-restricted comparison plots and tables (only applies when
-  # item_exclusions are set above)
   run_restricted_comparison: true
-  # Run LME model comparison (Model 1 vs Model 2 via likelihood ratio test)
   run_model_comparison: true
-  # Ceiling/floor effects figure (all conditions, jitter + mean crossbar)
   run_ceiling_effects_figure: true
-  # Run period-specific intervention effect analysis (Int-in-P1 vs Int-in-P2)
   run_period_specific_intervention: true
-  # Run 4-subgroup (sequence x intervention form) contrasts
   run_subgroup4_contrasts: true
-  # Run post-hoc paired-test power/sample-size analysis
   run_post_hoc_power: true
-  # Run exploratory item-level logistic mixed models
   run_logistic_mixed_models: true
 
 # -----------------------------------------------------------------------------
-# Psychometrics settings
-# Controls ability-stratified item analysis and suspicious item detection.
-# These settings affect 03_psychometrics.R and the corresponding tables/figures.
+# Psychometrics
 # -----------------------------------------------------------------------------
 psychometrics:
-  # Number of ability strata (quantile groups) for stratified item analysis.
-  # 3 = tertile analysis (T1 lowest, T3 highest).  Minimum 2, maximum 10.
-  # 3 is recommended for N < 30 to keep bins stable.
   ability_strata: 3
-
-  # Suspicious item detection thresholds.
-  # top_miss_threshold: flag an item if the TOP ability stratum misses it at
-  #   this rate or above. E.g. 0.25 = flagged when >=25% of the top group misses.
   top_miss_threshold: 0.25
-
-  # bottom_hit_threshold: flag an item if the BOTTOM ability stratum gets it
-  #   right at this rate or above. E.g. 0.60 = flagged when >=60% of the
-  #   bottom group answers correctly (suggests guessing / item is too easy).
   bottom_hit_threshold: 0.60
-
-  # Minimum item-rest correlation to avoid the "negative discrimination" flag.
-  # Items with item_rest_r below this threshold are flagged.
   min_item_rest_r: 0.10
-
-  # Maximum proportion of missing responses per item before a warning is logged.
-  # E.g. 0.05 = warn if >5% of responses for an item are NA.
   max_item_missing_rate: 0.05
-
-  # Maximum proportion of missing responses per participant before a warning.
-  # E.g. 0.20 = warn if a participant skipped >20% of items on any form.
   max_participant_missing_rate: 0.20
 
 # =============================================================================
-# Comparison figures (optional -- use RunPipeline.bat option [9] or set
-# COMPARISON_CONFIG env var and run Rscript R\run_comparison.R)
+# Comparison runs are configured separately in config/comparison_*.yml and are
+# not part of the normal manuscript_selected / extra output tree.
 # =============================================================================
-# This section is NOT read by the main pipeline (run_all.R).
-# It is read by run_comparison.R / 08_comparison_figures.R to generate
-# side-by-side or top-and-bottom panels comparing multiple completed runs.
-#
-# Create a separate YAML file (e.g. config/comparison_my_study.yml) that
-# contains only this section, then set:
-#   $env:COMPARISON_CONFIG = "config\comparison_pilot.yml"
-# before running Rscript R\run_comparison.R  -- or use RunPipeline.bat option [9].
-# -----------------------------------------------------------------------------
-# comparison:
-#
-#   # Completed pipeline runs to compare.
-#   # 'name' must match the study.name used when that run was executed
-#   # (i.e. the output directory name under outputs/).
-#   runs:
-#     - name:  "my_study_all_items"
-#       label: "All Items"
-#     - name:  "my_study_excl_x1"
-#       label: "X1 Excluded"
-#
-#   # How to arrange the panels.
-#   #   "side_by_side"  -- runs left to right (wide composite)
-#   #   "top_bottom"    -- runs stacked vertically (tall composite)
-#   layout: "side_by_side"
-#
-#   # Name for the output directory (created under outputs/).
-#   output_name: "comparison_my_study"
-#
-#   # Figure subfolders to process. "all" = process every subfolder.
-#   # Or list specific ones: ["primary", "period_effects"]
-#   figure_groups: "all"
-#
-#   # Label font size (points) printed above each run's column/row.
-#   label_font_size: 28
-#
-#   # Output PNG resolution.
-#   dpi: 300

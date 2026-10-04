@@ -1,0 +1,203 @@
+# =============================================================================
+# visual_config.yml
+# Shared presentation defaults for figures, tables, and manuscript-facing output.
+#
+# Keep study meaning, column mapping, scoring, analysis settings, and wording in
+# study_config.yml. Keep typography, colors, dimensions, spacing, and other
+# presentation choices here.
+#
+# Override this file with PIPELINE_VISUAL_CONFIG when needed.
+# =============================================================================
+
+figures:
+  dpi: 300
+  width_in: 7.5
+  height_in: 5.0
+  include_titles: false
+  base_font_size: 15
+  font_family: "sans"
+
+  # Core palette
+  color_intervention: "#2E8B57"
+  color_control: "#CD853F"
+  color_period1: "#4682B4"
+  color_period2: "#B22222"
+  color_seq_ab: "#2E8B57"
+  color_seq_ba: "#8B4513"
+  color_form_x: "#4682B4"
+  color_form_y: "#B22222"
+
+  # Shared geometry
+  point_alpha: 0.75
+  point_size: 2.2
+  line_alpha: 0.55
+  errorbar_width: 0.18
+  show_ceiling_floor_lines: true
+  significance_style: "none"
+
+  # Figure 1 / selected paired-score figure
+  paired_score_plot:
+    endpoint_label_size: 3.6
+
+  # Post-hoc power curve used as manuscript Figure 2
+  power_curve:
+    show_observed_sample: true
+    observed_sample_label: "Observed sample (n = {n})"
+    observed_sample_label_y: 0.075
+    observed_sample_label_size: 3.8
+    observed_sample_x_nudge_fraction: 0.0125
+    observed_sample_x_nudge_min: 0.9
+    legend_nrow: 2
+    legend_byrow: true
+    legend_title_position: "top"
+    legend_title_hjust: 0.5
+    legend_key_width_lines: 1.35
+    palette: "Dark2"
+    width_in: 7.5
+    height_in: 5.5
+    export_pdf: true
+
+  # Item-by-sequence figure used as manuscript Figure 3
+  item_endorsement:
+    axis_text_x_size: 10.5
+    width_in: 7.5
+    height_in: 8.0
+
+  # Figures regenerated directly by R/10_manuscript_selected.R
+  manuscript_selected:
+    base_font_size: 15
+    caption_size: 11
+
+    condition_hist_width_in: 6.5
+    condition_hist_height_in: 4.5
+
+    paired_difference_width_in: 6.5
+    paired_difference_height_in: 4.5
+
+    fisher_pitman:
+      width_in: 7.5
+      height_in: 7.2
+      observed_label_size: 3.7
+      observed_label_nudge_pp: 0.35
+      observed_label_y_fraction: 0.94
+      observed_label_fill: "white"
+      observed_label_fill_alpha: 0.90
+      null_fill: "grey75"
+      extreme_fill: "firebrick"
+      observed_color: "#2E8B57"
+      reflected_threshold_color: "firebrick"
+      p_value_color: "firebrick"
+      p_value_size: 4.0
+      panel_title_size: 15
+
+# =============================================================================
+# Figure S1 presentation
+# Study-specific wording and whether to generate S1 remain in study_config.yml.
+# =============================================================================
+flow_diagram:
+  width_in: 7.5
+  height_in: 5.0
+  dpi: 300
+  show_row_labels: false
+
+  colors:
+    control_fill: "#FFF3E6"
+    control_border: "#D8893A"
+    control_text: "#6B3A10"
+    ai_fill: "#EAF7EF"
+    ai_border: "#2E8B57"
+    ai_text: "#174A2D"
+    posttest_fill: "#EAF3FC"
+    posttest_border: "#3A70B8"
+    posttest_text: "#17376D"
+    panel_fill: "#FAFAFA"
+    panel_border: "#D5D5D5"
+    subgroup_fill: "#FFFFFF"
+    subgroup_border: "#B8B8B8"
+    dark_text: "#242424"
+    arrow: "#AFAFAF"
+
+  font_sizes:
+    setup: 3.60
+    header: 3.05
+    subgroup: 2.70
+    cell: 3.15
+    posttest: 2.90
+    row_label: 2.20
+
+# =============================================================================
+# Table presentation
+# =============================================================================
+tables:
+  # Ordinary canonical table PNGs created by save_table().
+  canonical:
+    font_size: 14
+    row_padding_px: 6
+    export_expand_px: 8
+    fallback_font_size: 11
+    fallback_line_height_px: 28
+
+  # Numbered manuscript-selected tables.
+  manuscript:
+    font_size: 17
+    vwidth: 1120
+    table_width_pct: 94
+    row_padding_px: 6
+    header_padding_px: 8
+    horizontal_padding_px: 10
+    export_expand_px: 12
+    source_note_size_offset: 1
+
+    styles:
+      table1a_score_descriptive_summary:
+        widths: [24, 9, 22, 29, 16]
+        left_cols: ["Condition"]
+        divider_after: "Condition"
+        font_size: 18
+
+      table1b_primary_paired_contrast:
+        widths: [67, 33]
+        left_cols: ["Statistic"]
+        right_cols: ["Estimate"]
+        divider_after: "Statistic"
+        font_size: 18
+        vwidth: 700
+        horizontal_padding_px: 18
+
+      table2_supporting_analysis_summary:
+        widths: [24, 36, 24, 8, 8]
+        left_cols: ["Model", "Contrast"]
+        divider_after: "Contrast"
+        font_size: 17
+
+      table_s1_post_hoc_power_analysis:
+        widths: [25, 29, 14, 16, 16]
+        center_all: true
+        divider_after: "Target difference (score units)"
+        font_size: 17
+
+      table_s2_sign_permutation_tests:
+        widths: [28, 26, 7, 9, 22, 8]
+        left_cols: ["Test", "Difference definition"]
+        divider_after: "Difference definition"
+        font_size: 16
+        vwidth: 1150
+
+      table_s3_logistic_mixed_model_results:
+        widths: [18, 27, 14, 8, 20, 6, 7]
+        left_cols: ["Model", "Contrast"]
+        divider_after: "Contrast"
+        font_size: 16
+        vwidth: 1250
+
+      table_s4_randomized_sequence_paired_differences:
+        widths: [25, 8, 22, 22, 23]
+        left_cols: ["Randomized sequence"]
+        divider_after: "Randomized sequence"
+        font_size: 17
+
+      table_s5_descriptive_scores:
+        widths: [24, 9, 22, 29, 16]
+        left_cols: ["Condition"]
+        divider_after: "Condition"
+        font_size: 17

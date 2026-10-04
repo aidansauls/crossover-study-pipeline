@@ -1,58 +1,62 @@
 # config/
 
-This folder holds YAML configuration files. Each file controls one analysis run.
-The `study.name` value in each config determines the output subfolder under `outputs/`.
+The pipeline deliberately separates study meaning from presentation settings.
 
-## Files
+## `study_config.yml`
 
-| File | Purpose |
-|---|---|
-| `study_config.yml` | Master template -- copy and rename this for your own study |
-| `example_data.yml` | Config used by the bundled 100-participant example dataset |
-| `comparison_example.yml` | Generic comparison-workflow example; edit run names locally |
+This is the study/analysis configuration. It controls things that change what the data mean or how the analysis is defined, including:
 
-## Creating your own config
+- study and condition labels
+- input column mapping
+- direct-identifier handling
+- item exclusions
+- score scaling
+- analysis settings
+- post-hoc power targets
+- manuscript wording
+- whether optional analyses and Figure S1 are generated
 
-1. Copy `study_config.yml` and rename it -- e.g. `my_study.yml`
-2. Set `study.name` to match your data folder name under `study_data/`
-3. Update labels, item exclusions, colors, and thresholds as needed
-4. Review `publication_outputs` to choose the main figures/tables and whether
-   the complete supplementary figure/table trees should be assembled
-5. Run with `RunPipeline.bat` and select your config when prompted
+Do not put font sizes, colors, table widths, or figure dimensions here.
 
-The default main-output IDs are:
+## `visual_config.yml`
 
-- Figures: `paired_score_plot`, `power_curve`, `item_endorsement_by_sequence`
-- Tables: `score_descriptive_summary`, `primary_paired_contrast`,
-  `supporting_analysis_summary`
+This is the presentation configuration. It controls things that change how outputs look without changing the analysis, including:
 
-The assembled files are written to
-`outputs/<study>/publication_outputs/main_figures/` and `main_tables/`. Set
-`include_supplementary_figures` or `include_supplementary_tables` to `false`
-when the full supplementary export is not wanted. Advanced users may put an
-output-relative PNG/table path in a main list to select a custom output.
-The power figure is additionally exported as a vector PDF when
-`figures.power_curve.export_pdf` is `true` (the default).
+- figure dimensions and DPI
+- font sizes and families
+- colors
+- point/line geometry
+- legend layout
+- Figure S1 styling
+- manuscript-selected figure sizing
+- ordinary and manuscript table sizing/column widths
 
-The tracked template remains generic. After each successful run, the pipeline
-writes the exact resolved settings (including runtime overrides) to
-`outputs/<study>/run_provenance/effective_config.yml`. Keep real-study configs
-local; do not add them to the public repository.
+`PIPELINE_VISUAL_CONFIG` can point to a different visual config when needed.
 
-## Multiple analysis variants
+## `example_data.yml`
 
-To run several exclusion variants of the same dataset, create one config file
-per variant with different `study.name` values and different `item_exclusions`.
-The pipeline's multi-run mode (option [2] at the exclusions prompt) automates this.
+This is the example study configuration used with the repository's example data. It demonstrates the study/analysis schema without duplicating visual settings; visual defaults continue to come from `visual_config.yml`.
 
-See the main [README](../README.md#6-multiple-analysis-variants) for the full
-explanation and the comparison figures workflow.
+## Runtime overrides
+
+The Windows launcher and comparison workflow may temporarily override selected settings through environment variables such as:
+
+- `STUDY_NAME`
+- `STUDY_DATA_PATH`
+- `PIPELINE_CONFIG`
+- `PIPELINE_VISUAL_CONFIG`
+- `ITEM_EXCLUSIONS`
+- `REUSE_DATA`
+- `ANALYSIS_MODULES`
+
+A successful full run writes the resolved effective configuration to:
+
+```text
+outputs/<study>/extra/logs/effective_config.yml
+```
+
+That effective configuration is what the reviewer-bundle builder uses, so item-exclusion or other runtime choices are not silently lost.
 
 ## Comparison configs
 
-Comparison configs (for generating side-by-side panel figures from multiple runs)
-live here too. Use the naming convention `comparison_<study>.yml`.
-The BAT's option [9] lists all `comparison_*.yml` files automatically.
-See [README section 6](../README.md#6-multiple-analysis-variants) for the YAML format.
-The tracked `comparison_example.yml` uses only generic names; copy it locally for
-study-specific comparisons.
+Comparison runs use their own `comparison_*.yml` files. The normal study-run output library is organized semantically under `extra/`; historical group names in older comparison configs are translated where possible for backward compatibility.

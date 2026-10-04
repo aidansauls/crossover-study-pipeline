@@ -40,6 +40,7 @@ study_data/*/
 /AppendixI_ReviewerReproducibilityFiles/
 /AppendixI_ReviewerReproducibilityFiles.zip
 /R/12_build_reviewer_package.R
+/MakeReviewerBundle.bat
 /tools/reviewer/
 
 # ── Analysis outputs ───────────────────────────────────────────────────────────
@@ -65,3 +66,6 @@ _test_*.txt
 
 # ── Local test clone of the repository ────────────────────────────────────────
 clone/
+
+# Explicitly identifiable real study data
+/study_data/IdentifiableData_PilotN15/

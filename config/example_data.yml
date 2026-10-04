@@ -1,9 +1,7 @@
 # =============================================================================
 # example_data.yml
-# Example dataset bundled with the repo.
-# Run:  $env:PIPELINE_CONFIG = "config\example_data.yml"
-#       $env:STUDY_DATA_PATH = "study_data\example_data"
-#       Rscript R\run_all.R
+# Example/synthetic study configuration. Visual settings are inherited from
+# config/visual_config.yml.
 # =============================================================================
 
 study:
@@ -16,10 +14,12 @@ study:
 columns:
   participant_id: "Participant_ID"
   intervention_order: "Intervention_Order"
-  control_order: "Control_Order"
   form_x_order: "X_Order"
   form_y_order: "Y_Order"
   time_taken: "Time_taken"
+
+privacy:
+  additional_direct_identifier_columns: []
 
 item_exclusions:
   x: []
@@ -40,58 +40,32 @@ power_analysis:
   target_effects_pct: [5, 8, 10, 12, 15, 20]
   max_n: null
 
-publication_outputs:
-  enabled: true
-  folder_name: "publication_outputs"
-  main_figures:
-    - "paired_score_plot"
-    - "power_curve"
-    - "item_endorsement_by_sequence"
-  main_tables:
-    - "score_descriptive_summary"
-    - "primary_paired_contrast"
-    - "supporting_analysis_summary"
-  include_supplementary_figures: true
-  include_supplementary_tables: true
-
 display_labels:
-  condition_control: "No-AI"
-  condition_ai: "AI-assisted"
-  condition_control_short: "No-AI"
-  condition_ai_short: "AI-assisted"
-  condition_control_session: "No-AI study"
-  condition_ai_session: "AI-assisted study"
-  sequence_control_first: "No-AI first"
-  sequence_ai_first: "AI-assisted first"
+  condition_control: "Control"
+  condition_ai: "Intervention"
+  condition_control_short: "Control"
+  condition_ai_short: "Intervention"
+  condition_control_session: "Control study"
+  condition_ai_session: "Intervention study"
+  sequence_control_first: "Control first"
+  sequence_ai_first: "Intervention first"
 
 figures:
-  dpi: 300
-  width_in: 7.5
-  height_in: 5.0
-  include_titles: false
-  base_font_size: 12
-  font_family: "sans"
-  color_intervention: "#2E8B57"
-  color_control:      "#CD853F"
-  color_period1:      "#4682B4"
-  color_period2:      "#B22222"
   y_axis_score_label: "Rescaled 0-15 score"
   x_axis_form_label: "Test Form"
-  color_seq_ab: "#2E8B57"
-  color_seq_ba: "#8B4513"
-  color_form_x: "#4682B4"
-  color_form_y: "#B22222"
-  point_alpha: 0.75
-  point_size:  2.2
-  line_alpha:  0.55
-  errorbar_width: 0.18
-  show_ceiling_floor_lines: true
-  significance_style: "none"
-  power_curve:
-    show_observed_sample: true
-    observed_sample_label: "Observed sample (n = {n})"
-    observed_sample_label_y: 0.07
-    export_pdf: true
+
+flow_diagram:
+  generate: true
+  output_filename: "figure_s1_participant_flow.png"
+  setup_label: "Participants (n = {n}) were randomized to sequence before the session\nand completed the common pre-period procedures before Block 1"
+  control_sequence_label: "Control first"
+  ai_sequence_label: "Intervention first"
+  period1_control_label: "Control study"
+  period1_ai_label: "Intervention study"
+  control_short_label: "Control study"
+  ai_short_label: "Intervention study"
+  period2_control_label: "Control study"
+  period2_ai_label: "Intervention study"
 
 tables:
   export_csv: true

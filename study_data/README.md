@@ -1,14 +1,13 @@
 # study_data/
 
-Place your study data here. This folder is not committed to the repository --
-participant data should never be version-controlled.
+Place local study inputs here. Real participant data must not be committed to the
+repository. Only the synthetic `example_data/` directory is intended for Git.
 
 ## Folder structure
 
-Create one subfolder per study, with the subfolder name matching the `study.name`
-value in your config file:
+Use one folder per study:
 
-```
+```text
 study_data/
   my_study/
     assignment.csv
@@ -16,23 +15,32 @@ study_data/
     posttest_y_items.csv
 ```
 
----
+The folder name does not have to equal the final output name when `STUDY_NAME` is
+overridden, but keeping them aligned is usually less confusing.
 
-## File specifications
+## `assignment.csv`
 
-### assignment.csv
+Required logical fields are configured in `config/study_config.yml`:
 
-One row per participant. Describes the crossover order for each person.
+```text
+participant_id
+intervention_order
+control_order
+form_x_order
+form_y_order
+```
 
-| Column | Required | Values | Notes |
-|---|---|---|---|
-| `Participant_ID` | Yes | Any unique identifier | Text or number |
-| `Intervention_Order` | Yes | `1st` or `2nd` | Which period the participant received the intervention |
-| `Control_Order` | Yes | `1st` or `2nd` | Which period the participant received the control condition |
-| `X_Order` | Yes | `1st` or `2nd` | Which period the participant took Form X |
-| `Y_Order` | Yes | `1st` or `2nd` | Which period the participant took Form Y |
+With the default column mapping, the CSV headers are:
 
-**Example:**
+```text
+Participant_ID
+Intervention_Order
+Control_Order
+X_Order
+Y_Order
+```
+
+Example:
 
 ```csv
 Participant_ID,Intervention_Order,Control_Order,X_Order,Y_Order
@@ -42,27 +50,21 @@ P003,1st,2nd,2nd,1st
 P004,2nd,1st,1st,2nd
 ```
 
-Notes:
-- The pipeline accepts `1st`/`2nd` (case-insensitive). Do not use `1`/`2` or `First`/`Second`.
-- `Intervention_Order` and `Control_Order` must both be present and must be inverses
-  of each other for every participant. The pipeline will error if either is missing
-  or contains an unrecognized value.
-- Keep direct identifiers (including names, email addresses, phone numbers, and
-  contact details) out of analysis CSVs. Use anonymous study IDs only.
+The two condition-order columns must be complementary for every participant, as
+must the two form-order columns.
 
----
+The order parser accepts common first/second encodings including:
 
-### posttest_x_items.csv
+```text
+1st / 2nd
+first / second
+1 / 2
+period1 / period2
+```
 
-One row per participant, one column per item. Contains raw item-level responses
-for Form X (the first posttest form).
+## `posttest_x_items.csv`
 
-| Column | Required | Values | Notes |
-|---|---|---|---|
-| `Participant_ID` | Yes | Matches assignment.csv | Used to join with assignment and Form Y data |
-| `X1`, `X2`, ... `Xn` | Yes | `0` (incorrect) or `1` (correct) | One column per scored item |
-
-**Example:**
+One row per participant with the participant key and binary scored items:
 
 ```csv
 Participant_ID,X1,X2,X3,X4,X5
@@ -72,26 +74,9 @@ P003,1,1,0,1,1
 P004,0,0,1,0,1
 ```
 
-Notes:
-- Column names must start with the prefix configured in `study_config.yml`
-  (`items.x_prefix`, default `X`).
-- Missing (`NA`) values are supported; participants with excessive missing data
-  can be flagged via `analysis.min_complete_items` in the config.
-- Item order within the file does not matter.
+## `posttest_y_items.csv`
 
----
-
-### posttest_y_items.csv
-
-One row per participant, one column per item. Contains raw item-level responses
-for Form Y (the second posttest form). Identical structure to `posttest_x_items.csv`.
-
-| Column | Required | Values | Notes |
-|---|---|---|---|
-| `Participant_ID` | Yes | Matches assignment.csv | Used to join with assignment and Form X data |
-| `Y1`, `Y2`, ... `Yn` | Yes | `0` (incorrect) or `1` (correct) | One column per scored item |
-
-**Example:**
+Same structure for Form Y:
 
 ```csv
 Participant_ID,Y1,Y2,Y3,Y4,Y5
@@ -101,42 +86,66 @@ P003,1,1,1,0,0
 P004,0,1,0,1,1
 ```
 
-Notes:
-- Column names must start with the prefix configured in `study_config.yml`
-  (`items.y_prefix`, default `Y`).
-- The number of items in Form X and Form Y do not need to match; scores are
-  scaled to a common metric defined by `scores.scale_to` in the config (default: 10).
+The forms do not have to contain the same number of included items. Participant
+scores are rescaled to the common maximum configured under `scores.scale_to`.
 
----
+## Optional timing column
 
-## Pointing the pipeline at your data
+If the configured timing column is present in the posttest files, the pipeline
+parses common formats such as numeric seconds, `MM:SS`, `HH:MM:SS`, or strings
+such as `9 min 46 sec`.
 
-Use `RunPipeline.bat` and choose option [1] (automatic scan) or [2] (manual path).
-The scanner looks for subfolders of `study_data/` that contain all three required files.
+## Direct identifiers are allowed locally, but handled explicitly
 
----
+For a real local analysis you may receive source files containing direct
+identifiers such as names, emails, student IDs, medical-record numbers, dates of
+birth, phone numbers, or addresses.
 
-## Example dataset
+The import stage detects common direct-identifier column names. Additional
+study-specific identifier columns can be declared in `study_config.yml`:
 
-A fully-synthetic example dataset is included in this folder at `study_data/example_data/`.
-It is the fastest way to verify your R environment is set up correctly before
-working with your own data.
+```yaml
+privacy:
+  additional_direct_identifier_columns:
+    - local_subject_number
+```
 
-**What it contains:**
+If direct identifiers are detected, the pipeline creates:
 
-| File | Description |
-|---|---|
-| `assignment.csv` | 100 synthetic participants with randomised condition and form order |
-| `posttest_x_items.csv` | Responses to 15 binary items on Form X |
-| `posttest_y_items.csv` | Responses to 15 binary items on Form Y |
+```text
+outputs/<study>/extra/data/
+  identified/
+    assignment.csv
+    posttest_x_items.csv
+    posttest_y_items.csv
+    participant_id_mapping.csv   # only when the participant key itself is direct
 
-**How to run it:**
+  deidentified/
+    assignment.csv
+    posttest_x_items.csv
+    posttest_y_items.csv
 
-The easiest way is `RunPipeline.bat` option [1] — the automatic scanner will find
-`study_data/example_data/` and list it alongside any real studies you have. Select
-it and choose `config/example_data.yml` when prompted.
+  deidentification/
+    manifest.csv
+```
 
-Alternatively, from a terminal:
+Downstream analysis uses the deidentified copies. Identified copies remain local
+and are never included in a reviewer bundle.
+
+If no direct identifiers are detected, `extra/data/` is not created at all.
+
+A generic anonymous participant code such as `P001` is treated as a study ID.
+A configured participant key explicitly named like `student_id` is treated as a
+direct identifier and is pseudonymized before downstream analysis.
+
+## Example data
+
+`study_data/example_data/` is fully synthetic. Run it with
+`config/example_data.yml` to verify the environment before using real data.
+
+The Windows launcher will discover it automatically.
+
+From PowerShell, an equivalent direct run is:
 
 ```powershell
 $env:PIPELINE_CONFIG = "config\example_data.yml"
@@ -144,18 +153,22 @@ $env:STUDY_DATA_PATH = "study_data\example_data"
 Rscript R\run_all.R
 ```
 
-Outputs will appear in `outputs/example_data/`.
+Generated output appears under:
 
----
+```text
+outputs/example_data/
+  manuscript_selected/
+  extra/
+```
 
-## Public repository and reviewer-package boundary
+## Public-repository boundary
 
-Only `example_data/` is public and tracked. Real-study subdirectories are ignored
-by Git and must remain local. Study-specific resolved configuration is written to
-`outputs/<study>/run_provenance/effective_config.yml`, not to this directory.
+The tracked repository should contain only:
 
-For an authorized manuscript run, the explicit reviewer-package builder can copy
-the validated deidentified inputs, resolved configuration, anonymized required
-code, expected manuscript outputs, and checksums into a local ZIP. That package
-is also ignored by Git. Identified source data must be stored separately and must
-never be used as reviewer-package input.
+- code
+- documentation
+- config templates/example config
+- synthetic example data
+
+Real study inputs, all generated outputs, identified/deidentified local copies,
+and reviewer reproduction bundles remain local and are ignored by Git.

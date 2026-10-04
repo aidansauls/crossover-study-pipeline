@@ -1,54 +1,90 @@
 # outputs/
 
-Generated outputs land here. This folder is not committed to the repository --
-all figures and tables are fully reproducible from your data and config file.
+Generated study outputs land here. `outputs/` is derived material and should not be committed for real participant data.
 
-## Structure
+## Standard study-run structure
 
-One subfolder is created per study run, named after the `study.name` in the config:
+Each study run has only two human-facing top-level routes:
 
-```
+```text
 outputs/
   my_study/
-    manuscript_selected/ # Final manuscript-only main/supplement tree
+    manuscript_selected/
       main_body/
         figures/
         tables/
       supplement/
         figures/
         tables/
-    publication_outputs/ # Easy-to-find main figures/tables + optional supplements
-      main_figures/
-      main_tables/
-      supplementary_figures/
-      supplementary_tables/
-    figures/          PNG figures (primary, secondary, descriptive, etc.)
-    tables/           CSV tables
-    tables_png/       Formatted PNG versions of tables
-    logs/             run.log, session JSON, and SUMMARY.txt
-    run_provenance/   effective_config.yml (resolved after runtime overrides)
-    rds/              Intermediate R objects (reuse with REUSE_DATA=1)
-    InternalUse/      Participant-identifiable files (never share)
+      README.md
+      manifest_validation.csv
+
+    extra/
+      figures/
+        ceiling_and_floor/
+        condition_effects/
+        item_level/
+        model_diagnostics/
+        power_and_precision/
+        psychometrics/
+        sample_characteristics/
+        score_distributions/
+        sequence_and_period/
+        study_design/
+        timing/
+        other/
+      tables/
+        ...semantic categories...
+      analysis_objects/
+      logs/
+      data/                 # created only when direct identifiers are detected
+        identified/
+        deidentified/
+        deidentification/
+      reviewer_bundle/      # created only when explicitly requested
 ```
 
-`publication_outputs/` is controlled by the `publication_outputs` section of
-the study config. By default it contains the three selected main figures and
-three selected main tables, plus all remaining canonical figures and tables as
-supplementary material. The canonical folders remain unchanged.
-When `figures.power_curve.export_pdf` is enabled (the default), the main power
-figure is also provided as a vector PDF alongside its high-resolution PNG.
+`manuscript_selected/` is the authoritative numbered manuscript/supplement set. A figure or table promoted into this directory is not kept as a duplicate manuscript-role file under `extra/`.
 
-`manuscript_selected/` is rebuilt from scratch and contains only finalized main
-and supplementary manuscript files plus its README and validation manifest.
+`extra/` contains everything that is useful for analysis, checking, diagnostics, exploration, or reproducibility but is not part of the selected manuscript set. Figure and table folders are named for what the output contains, not for whether it was historically called primary, supplementary, or exploratory.
+
+## Identified and deidentified data
+
+`extra/data/` is created only when the import step detects obvious direct identifiers such as names, email addresses, student IDs, MRNs, dates of birth, phone numbers, or addresses, including any study-specific identifier columns listed in the study config.
+
+When direct identifiers are detected:
+
+- `identified/` preserves the supplied source files and any ID mapping needed internally.
+- `deidentified/` contains the analysis-safe CSV copies used downstream.
+- `deidentification/manifest.csv` records which direct-identifier columns were detected.
+
+When no direct identifiers are detected, no `extra/data/` folder is created.
+
+## Logs
+
+A full run writes a terminal-style transcript under:
+
+```text
+extra/logs/<timestamp>_run.log
+extra/logs/latest_run.log
+```
+
+`latest_run.log` is the obvious first place to look after either a successful or failed run. The effective configuration and session information are also stored in `extra/logs/` for reproducibility.
+
+## Reviewer bundle
+
+The reviewer bundle is not generated on every run. Run `MakeReviewerBundle.bat` after a successful full study run.
+
+The builder writes under:
+
+```text
+extra/reviewer_bundle/
+  reviewer_reproducibility_bundle/
+  reviewer_reproducibility_bundle.zip
+```
+
+The reviewer package contains only the scripts needed to reproduce `manuscript_selected/`, the exact effective configs, deidentified study inputs reconstructed from the analysis object, reference manuscript-selected outputs, and reviewer-facing logs/validation. It does not contain Git metadata, example data/configs, identified data, or the non-manuscript `extra/` figure/table library.
 
 ## REUSE_DATA
 
-If the pipeline has already run once for a study, you can skip the data import and
-scoring steps on subsequent runs by setting `REUSE_DATA=1`. The BAT launcher's
-option [8] (Rerun last study) does this automatically.
-
-## Comparison runs
-
-When running multiple exclusion variants (multi-run mode or separate configs),
-each variant gets its own subfolder. The comparison figures workflow reads from
-multiple subfolders to build side-by-side panel figures.
+Set `REUSE_DATA=1` to reuse `extra/analysis_objects/*.rds` and skip import/scoring on a rerun. The Windows launcher exposes this as the rerun option after a completed run.

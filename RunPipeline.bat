@@ -106,7 +106,7 @@ echo    [4] Manual data entry  - Enter participant data interactively
 echo    [5] Custom modules     - Choose which analyses to run
 echo    ----
 echo    [6] Open outputs folder in Explorer
-echo    [7] View last run SUMMARY.txt
+echo    [7] View latest run log
 if "!LAST_STUDY_NAME!"=="" (
 echo    [8] Rerun last study    (no prior run this session)
 ) else (
@@ -333,23 +333,28 @@ explorer "!_OUTROOT!"
 goto :MAIN_MENU
 
 :: =============================================================================
-:: MODE 7 — View last run SUMMARY.txt
+:: MODE 7 — View latest run transcript
 :: =============================================================================
 :MODE_7
 echo.
-set "LATEST_SUMMARY="
-for /f "delims=" %%F in ('dir /b /s /o-d "%PIPELINE_ROOT%\outputs\*_SUMMARY.txt" 2^>nul') do (
-    if "!LATEST_SUMMARY!"=="" set "LATEST_SUMMARY=%%F"
+set "LATEST_LOG="
+for /f "delims=" %%F in ('dir /b /s /o-d "%PIPELINE_ROOT%\outputs\latest_run.log" 2^>nul') do (
+    if "!LATEST_LOG!"=="" set "LATEST_LOG=%%F"
 )
-if "!LATEST_SUMMARY!"=="" (
-    echo  No SUMMARY.txt found in outputs\ yet. Run an analysis first.
+if "!LATEST_LOG!"=="" (
+    for /f "delims=" %%F in ('dir /b /s /o-d "%PIPELINE_ROOT%\outputs\*_run.log" 2^>nul') do (
+        if "!LATEST_LOG!"=="" set "LATEST_LOG=%%F"
+    )
+)
+if "!LATEST_LOG!"=="" (
+    echo  No run log found in outputs\ yet. Run an analysis first.
     echo.
     pause
     goto :MAIN_MENU
 )
-echo  Showing: !LATEST_SUMMARY!
+echo  Showing: !LATEST_LOG!
 echo.
-type "!LATEST_SUMMARY!"
+type "!LATEST_LOG!"
 echo.
 pause
 goto :MAIN_MENU
@@ -392,7 +397,7 @@ if "!EXIT_CODE!"=="0" (
     echo   RUN FAILED  ^(exit code: !EXIT_CODE!^)
     echo  ================================================================
     echo.
-    echo   Check outputs\!STUDY_NAME!\logs\ for error details.
+    echo   Check outputs\!STUDY_NAME!\extra\logs\latest_run.log for error details.
     echo.
 )
 goto :POST_RUN_MENU
@@ -1015,24 +1020,29 @@ if "!EXIT_CODE!"=="0" (
     set "OUT_DIR=%PIPELINE_ROOT%\outputs\!STUDY_NAME!"
     echo   Output location: !OUT_DIR!
     echo.
-    :: Count outputs
-    set "FIG_COUNT=0"
-    set "CSV_COUNT=0"
-    for /r "!OUT_DIR!\figures" %%F in (*.png) do set /a FIG_COUNT+=1
-    for /r "!OUT_DIR!\tables"  %%F in (*.csv) do set /a CSV_COUNT+=1
-    echo   Figures (PNG) : !FIG_COUNT!
-    echo   Tables  (CSV) : !CSV_COUNT!
+    :: Count the two human-facing output routes.
+    set "SEL_COUNT=0"
+    set "EXTRA_FIG_COUNT=0"
+    set "EXTRA_TABLE_COUNT=0"
+    if exist "!OUT_DIR!\manuscript_selected" for /r "!OUT_DIR!\manuscript_selected" %%F in (*) do set /a SEL_COUNT+=1
+    if exist "!OUT_DIR!\extra\figures" for /r "!OUT_DIR!\extra\figures" %%F in (*.png) do set /a EXTRA_FIG_COUNT+=1
+    if exist "!OUT_DIR!\extra\tables" for /r "!OUT_DIR!\extra\tables" %%F in (*.csv) do set /a EXTRA_TABLE_COUNT+=1
+    echo   Manuscript-selected files : !SEL_COUNT!
+    echo   Extra figures             : !EXTRA_FIG_COUNT!
+    echo   Extra table CSVs          : !EXTRA_TABLE_COUNT!
     echo.
-    echo   Next steps:
-    echo     1. Open outputs\!STUDY_NAME!\figures\  to review figures
-    echo     2. Open outputs\!STUDY_NAME!\tables\   to review tables
-    echo     3. Check outputs\!STUDY_NAME!\logs\    for the run log
+    echo   Output routes:
+    echo     manuscript_selected  = final numbered manuscript + supplement material
+    echo     extra                = diagnostics, non-selected outputs, logs, and conditional data handling
+    echo.
+    echo   Latest log:
+    echo     !OUT_DIR!\extra\logs\latest_run.log
     echo.
 ) else (
     echo   PIPELINE FAILED  (exit code: !EXIT_CODE!)
     echo  ================================================================
     echo.
-    echo   Check outputs\!STUDY_NAME!\logs\ for error details.
+    echo   Check outputs\!STUDY_NAME!\extra\logs\latest_run.log for error details.
     echo.
 )
 
@@ -1042,10 +1052,14 @@ set "LAST_DATA_FOLDER=!STUDY_DATA_PATH!"
 set "LAST_ITEM_EXCL=!ITEM_EXCLUSIONS!"
 set "LAST_CONFIG=!PIPELINE_CONFIG!"
 
+echo  The analysis process has finished. This window will stay open.
+echo.
+pause
+
 :POST_RUN_MENU
 echo    [M] Main menu
 echo    [O] Open output folder in Explorer
-echo    [V] View SUMMARY.txt
+echo    [V] View latest run log
 echo    [R] Rerun  (skip import + scores)
 echo    [Q] Quit
 echo.
@@ -1057,12 +1071,9 @@ if /i "!PR!"=="O" (
     goto :POST_RUN_MENU
 )
 if /i "!PR!"=="V" (
-    set "_SF="
-    for /f "delims=" %%F in ('dir /b /s /o-d "%PIPELINE_ROOT%\outputs\!LAST_STUDY_NAME!\logs\*_SUMMARY.txt" 2^>nul') do (
-        if "!_SF!"=="" set "_SF=%%F"
-    )
-    if "!_SF!"=="" (
-        echo  No SUMMARY.txt found yet.
+    set "_SF=%PIPELINE_ROOT%\outputs\!LAST_STUDY_NAME!\extra\logs\latest_run.log"
+    if not exist "!_SF!" (
+        echo  No latest_run.log found yet.
     ) else (
         echo.
         type "!_SF!"
